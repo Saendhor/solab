@@ -30,7 +30,6 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 */
 
 #include <dirent.h>
-#include <linux/limits.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
@@ -41,10 +40,11 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 #include <unistd.h>
 
 #define STACKSIZE 10
+#define PATHSIZE 1024
 
 //Shared data structure for thread(s) DIR and STAT
 typedef struct shared_thread_data {
-    char* stack[STACKSIZE];
+    char** stack;
     short index;
 
     sem_t stack_sem;
@@ -106,8 +106,8 @@ void* thread_dir_funct (void* args) {
         //printf("[%s] Reading file '%s'\n", myname, entry->d_name);
         
         //Manually creating path
-        char path[PATH_MAX];
-        snprintf(path,PATH_MAX,"%s/%s",dt->pathname,entry->d_name);
+        char path[PATHSIZE];
+        snprintf(path,PATHSIZE,"%s/%s",dt->pathname,entry->d_name);
         
         //printf("[%s] Passing path: '%s'\n", myname, path);
         if (lstat(path, &statbuf) == -1) {
@@ -120,7 +120,7 @@ void* thread_dir_funct (void* args) {
             //Add string to shared data stack
             pthread_mutex_lock(&dt->shared_thread_data->stack_mutex);
 
-            dt->shared_thread_data->stack[dt->shared_thread_data->index] = path;
+            
             //strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
             dt->shared_thread_data->index++;
             
@@ -165,6 +165,8 @@ int main (int argc, char* argv[]) {
     
     //Initializing
     shared_thread_data->index = 0;
+    shared_thread_data->stack = (char**) malloc ((sizeof(char) * PATHSIZE) * STACKSIZE);
+    shared_thread_data->stack[1] = "VENGO DAL MAIN";
 
     //Instantiate semaphore(s) or mutex(es)
     if ((sem_init(&shared_thread_data->stack_sem, 0, STACKSIZE)) != 0){
