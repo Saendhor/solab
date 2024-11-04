@@ -30,6 +30,7 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 */
 
 #include <dirent.h>
+#include <linux/limits.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
@@ -39,11 +40,12 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUFFERSIZE 10
+#define STACKSIZE 10
 
 //Shared data structure for thread(s) DIR and STAT
 typedef struct shared_thread_data {
-    char* stack[BUFFERSIZE];
+    char* stack[STACKSIZE];
+    short index;
 
     sem_t stack_sem;
     pthread_mutex_t stack_mutex;
@@ -65,7 +67,7 @@ typedef struct stat_data {
 
 //Shared data structure for thread STAT and MAIN
 typedef struct shared_data {
-    stat_data_t stat_stack[BUFFERSIZE];
+    stat_data_t stat_stack[STACKSIZE];
 
     //sem_t name
     //pthread_mutex name
@@ -83,7 +85,6 @@ void* thread_dir_funct (void* args) {
     DIR* dp;
     struct dirent* entry;
     struct stat statbuf;
-    int current_file_size;
     int iteration = 0;
 
     //Defining thread name
@@ -102,10 +103,32 @@ void* thread_dir_funct (void* args) {
     while ((entry = readdir(dp)) != NULL){
         iteration += 1;
         printf ("[%s] Iteration n. %d\n", myname, iteration);
-        printf("[%s] Reading file '%s'\n", myname, entry->d_name);
-        if (lstat(entry->d_name, &statbuf) == -1) {
+        //printf("[%s] Reading file '%s'\n", myname, entry->d_name);
+        
+        //Manually creating path
+        char path[PATH_MAX];
+        snprintf(path,PATH_MAX,"%s/%s",dt->pathname,entry->d_name);
+        
+        //printf("[%s] Passing path: '%s'\n", myname, path);
+        if (lstat(path, &statbuf) == -1) {
             perror("Error while trying to read entry name");
             exit(EXIT_FAILURE);
+        }
+        
+        if (S_ISREG(statbuf.st_mode)) {
+
+            //Add string to shared data stack
+            pthread_mutex_lock(&dt->shared_thread_data->stack_mutex);
+
+            dt->shared_thread_data->stack[dt->shared_thread_data->index] = path;
+            //strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
+            dt->shared_thread_data->index++;
+            
+            sem_wait(&dt->shared_thread_data->stack_sem);
+
+            printf("[%s] Element %s inserted in stack at index %d\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
+            pthread_mutex_unlock(&dt->shared_thread_data->stack_mutex);
+            printf("[%s] File '%s' added to buffer\n", myname, entry->d_name);
         }
 
     }
@@ -139,9 +162,12 @@ int main (int argc, char* argv[]) {
         perror("Error with inputed parameters");
         exit(EXIT_FAILURE);
     }
+    
+    //Initializing
+    shared_thread_data->index = 0;
 
     //Instantiate semaphore(s) or mutex(es)
-    if ((sem_init(&shared_thread_data->stack_sem, 0, BUFFERSIZE)) != 0){
+    if ((sem_init(&shared_thread_data->stack_sem, 0, STACKSIZE)) != 0){
         perror("Error while initializing stack semaphore");
         exit(EXIT_FAILURE);
     }
