@@ -1,6 +1,6 @@
 # Welcome to SOLAB!
 
-#   YEAR        NAME                STATUS
+    YEAR        NAME                STATUS
     2023-07-06  file-size           []
     2023-07-28  file-size-2         []
     2023-09-08  calc-verifier       []
