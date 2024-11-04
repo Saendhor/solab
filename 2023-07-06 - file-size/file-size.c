@@ -29,25 +29,29 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 
 */
 
+#include <dirent.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define BUFFERSIZE 10
 
-//Shared data structure for threads
+//Shared data structure for thread(s) DIR and STAT
 typedef struct shared_thread_data {
     char* stack[BUFFERSIZE];
 
-    //semafori
-    //mutex
+    sem_t stack_sem;
+    pthread_mutex_t stack_mutex;
 } shared_thread_data_t;
 
 typedef struct thread_dir_data {
     short id;
+    char* pathname;
     shared_thread_data_t* shared_thread_data;
 
 } thread_dir_data_t;
@@ -63,8 +67,8 @@ typedef struct stat_data {
 typedef struct shared_data {
     stat_data_t stat_stack[BUFFERSIZE];
 
-    //semafori
-    //mutex
+    //sem_t name
+    //pthread_mutex name
 
 } shared_data_t;
 
@@ -76,19 +80,47 @@ typedef struct thread_stat_data {
 
 void* thread_dir_funct (void* args) {
     thread_dir_data_t* dt = (thread_dir_data_t*) args;
+    DIR* dp;
+    struct dirent* entry;
+    struct stat statbuf;
+    int current_file_size;
+    int iteration = 0;
+
+    //Defining thread name
     char myname[6];
     sprintf(myname, "DIR-%d", dt->id);
 
-    printf("[%s] Ready to produce!\n", myname);
+    printf("[%s] Directory to scan: '%s'\n", myname, dt->pathname);
+    //Opens directory pointer
+    if ((dp = opendir(dt->pathname)) == NULL ){
+        perror("Error while trying to open specified directory");
+        exit(EXIT_FAILURE);
+    }
+    
+    //Loops to read all entries
+    printf("[%s] Scanning directory's list\n", myname);
+    while ((entry = readdir(dp)) != NULL){
+        iteration += 1;
+        printf ("[%s] Iteration n. %d\n", myname, iteration);
+        printf("[%s] Reading file '%s'\n", myname, entry->d_name);
+        if (lstat(entry->d_name, &statbuf) == -1) {
+            perror("Error while trying to read entry name");
+            exit(EXIT_FAILURE);
+        }
+
+    }
     
 
 
 
+    closedir(dp);
     return NULL;
 }
 
 void* thread_stat_funct (void* args) {
     thread_stat_data_t* dt = (thread_stat_data_t*) args;
+    
+    //Defining thread name
     char myname[4] = "STAT";
 
     printf("[%s] Ready to consume!\n", myname);
@@ -108,8 +140,20 @@ int main (int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    //Instantiate semaphore(s) or mutex(es)
+    if ((sem_init(&shared_thread_data->stack_sem, 0, BUFFERSIZE)) != 0){
+        perror("Error while initializing stack semaphore");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_mutex_init(&shared_thread_data->stack_mutex, NULL) != 0) {
+        perror("Error while initializing stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
+
     //Create DIR-i threads
-    printf("[MAIN] Instantiating %d Thread(s) DIR\n", num_dir);
+    printf("[MAIN] Instantiating %d thread(s) DIR\n", num_dir);
     //Memory allocation for the existance of the thread
     pthread_t* thread_dir = (pthread_t*) malloc ( sizeof(pthread_t) * num_dir);
     //Memory allocation for the data that will be used by the thread
@@ -118,6 +162,8 @@ int main (int argc, char* argv[]) {
     for (int i = 0; i < num_dir; i++) {
         //Determines the id of the thread_dir
         thread_dir_data[i].id = i+1;
+        //Determine associated folder
+        thread_dir_data[i].pathname = argv[i+1];
         //Gives the shared data defined in the main to the single thread
         thread_dir_data[i].shared_thread_data = shared_thread_data;
         if (pthread_create(&thread_dir[i], NULL, &thread_dir_funct, &thread_dir_data[i]) != 0) {
