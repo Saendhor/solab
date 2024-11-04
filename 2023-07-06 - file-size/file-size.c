@@ -30,19 +30,168 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 */
 
 #include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
+#define BUFFERSIZE 10
+
+//Shared data structure for threads
+typedef struct shared_thread_data {
+    char* stack[BUFFERSIZE];
+
+    //semafori
+    //mutex
+} shared_thread_data_t;
+
+typedef struct thread_dir_data {
+    short id;
+    shared_thread_data_t* shared_thread_data;
+
+} thread_dir_data_t;
+
+//type for the data structure in STAT and MAIN shared data
+typedef struct stat_data {
+    char pathname;
+    int filesize;
+
+} stat_data_t;
+
+//Shared data structure for thread STAT and MAIN
+typedef struct shared_data {
+    stat_data_t stat_stack[BUFFERSIZE];
+
+    //semafori
+    //mutex
+
+} shared_data_t;
+
+typedef struct thread_stat_data {
+    shared_thread_data_t* shared_thread_data;
+    shared_data_t* shared_data;
+    
+} thread_stat_data_t;
+
+void* thread_dir_funct (void* args) {
+    thread_dir_data_t* dt = (thread_dir_data_t*) args;
+    char myname[6];
+    sprintf(myname, "DIR-%d", dt->id);
+
+    printf("[%s] Ready to produce!\n", myname);
+    
+
+
+
+    return NULL;
+}
+
+void* thread_stat_funct (void* args) {
+    thread_stat_data_t* dt = (thread_stat_data_t*) args;
+    char myname[4] = "STAT";
+
+    printf("[%s] Ready to consume!\n", myname);
+
+
+    return NULL;
+}
+
+
 int main (int argc, char* argv[]) {
+    int num_dir = argc -1;
+    shared_thread_data_t* shared_thread_data = (shared_thread_data_t*) malloc (sizeof(shared_thread_data_t));
+    shared_data_t* shared_data = (shared_data_t*) malloc (sizeof(shared_data_t));
     
     if (argc < 2) {
         perror("Error with inputed parameters");
         exit(EXIT_FAILURE);
     }
 
-    printf("[MAIN] Welcome to the jungle!\n");
+    //Create DIR-i threads
+    printf("[MAIN] Instantiating %d Thread(s) DIR\n", num_dir);
+    //Memory allocation for the existance of the thread
+    pthread_t* thread_dir = (pthread_t*) malloc ( sizeof(pthread_t) * num_dir);
+    //Memory allocation for the data that will be used by the thread
+    thread_dir_data_t* thread_dir_data = (thread_dir_data_t*) malloc(sizeof(thread_dir_data_t) * num_dir);
+
+    for (int i = 0; i < num_dir; i++) {
+        //Determines the id of the thread_dir
+        thread_dir_data[i].id = i+1;
+        //Gives the shared data defined in the main to the single thread
+        thread_dir_data[i].shared_thread_data = shared_thread_data;
+        if (pthread_create(&thread_dir[i], NULL, &thread_dir_funct, &thread_dir_data[i]) != 0) {
+            perror("Error while creating thread DIR");
+            exit(EXIT_FAILURE);
+        }
+    }
+    printf("[MAIN] Thread(s)_dir created successfully!\n");
+
+    //Create STAT thread
+    printf("[MAIN] Instantiating the thread STAT\n");
+    //Memory allocation for the existance of the thread
+    pthread_t thread_stat = (pthread_t) malloc ( sizeof(pthread_t));
+    //Memory allocation for the data that will be used by the thread
+    thread_stat_data_t* thread_stat_data = (thread_stat_data_t*) malloc(sizeof(thread_stat_data_t));
+    if (pthread_create(&thread_stat, NULL, &thread_stat_funct, &thread_stat_data) != 0) {
+        perror("Error while creating thread");
+        exit(EXIT_FAILURE);
+    }
+
+    //// DO  STUFF ////
+
+
+
+
+    //// END STUFF ////
+    printf("[MAIN] Job done! Terminating execution gracefully...\n");
+
+    //Close thread(s) DIR
+    for (int i = 0; i < num_dir; i++) {
+        if (pthread_join(thread_dir[i], NULL) != 0){
+            perror("Error while closing thread DIR");
+            exit(EXIT_FAILURE);
+        }
+    }
+    printf("[MAIN] Thread(s) DIR successfully closed!\n");
+
+    //Close thread STAT
+    if (pthread_join(thread_stat, NULL) != 0) {
+        perror("Error while closing thread STAT");
+        exit(EXIT_FAILURE);
+    }
+    printf("[MAIN] Thread STAT successfully closed!\n");
+
+    //Free memory
+    free(thread_stat_data);
+    free(thread_dir_data);
+    free(thread_dir);
+
+    free(shared_thread_data);
+    free(shared_data);
+    printf("[MAIN] Memory successfully cleared!\n");
+
 
     return 0;
 }
+
+/*
+
+ESEMPIO
+
+$ ./file-size /usr/bin /usr/include/
+[D-1] scansione della cartella '/usr/bin'...
+[D-2] scansione della cartella '/usr/include/'...
+[D-2] trovato il file 'aio.h' in '/usr/include/'
+[D-2] trovato il file 'aliases.h' in '/usr/include/'
+[STAT] il file '/usr/include/aio.h' ha dimensione 7457 byte
+[D-1] trovato il file '411toppm' in '/usr/bin'
+[STAT] il file '/usr/include/aliases.h' ha dimensione 2032 byte
+[MAIN] con il file '/usr/include/aio.h' il totale parziale è di 7457 byte
+[MAIN] con il file '/usr/include/aliases.h' il totale parziale è di 9489 byte
+[D-1] trovato il file 'add-apt-repository' in '/usr/bin'
+[STAT] il file '/usr/bin/411toppm' ha dimensione 18504 byte
+...
+[MAIN] il totale finale è di 166389312 byte
+
+*/
