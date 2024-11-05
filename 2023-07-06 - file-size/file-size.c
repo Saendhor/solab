@@ -47,8 +47,13 @@ typedef struct shared_thread_data {
     char stack [STACKSIZE] [PATHSIZE];
     short index;
 
-    sem_t stack_sem;
+    unsigned short exit_status;
+
+    sem_t full_stack_sem;
+    sem_t empty_stack_sem;
     pthread_mutex_t stack_mutex;
+    pthread_mutex_t exit_status_mutex;
+
 } shared_thread_data_t;
 
 typedef struct thread_dir_data {
@@ -85,7 +90,6 @@ void* thread_dir_funct (void* args) {
     DIR* dp;
     struct dirent* entry;
     struct stat statbuf;
-    int iteration = 0;
 
     //Defining thread name
     char myname[6];
@@ -114,36 +118,100 @@ void* thread_dir_funct (void* args) {
             exit(EXIT_FAILURE);
         }
         
+        //Add string to shared data stack
         if (S_ISREG(statbuf.st_mode)) {
+            //Enter critical region
+            //down (empty)
+            if (sem_wait(&dt->shared_thread_data->empty_stack_sem) != 0) {
+                perror("Error while performing sem wait to empty_stack_sem");
+                exit(EXIT_FAILURE);
+            }
+            //down (mutex)
+            if (pthread_mutex_lock(&dt->shared_thread_data->stack_mutex) != 0) {
+                perror("Error while performing lock stack mutex");
+                exit(EXIT_FAILURE);
+            }
 
-            //Add string to shared data stack
-            pthread_mutex_lock(&dt->shared_thread_data->stack_mutex);
-
+            //Insert item into stack
             strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
-            dt->shared_thread_data->index++;
-            
-            sem_wait(&dt->shared_thread_data->stack_sem);
-
             printf("[%s] Element %s inserted in stack at index %d\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
-            pthread_mutex_unlock(&dt->shared_thread_data->stack_mutex);
-            //printf("[%s] File '%s' added to buffer\n", myname, entry->d_name);
-        }
+            //Increase stack index
+            dt->shared_thread_data->index++;
 
+            //Leave critical region
+            //up (mutex)
+            if (pthread_mutex_unlock(&dt->shared_thread_data->stack_mutex) != 0) {
+                perror("Error while performing unlock to stack mutex");
+                exit(EXIT_FAILURE);
+            }
+            //up (full)
+            if (sem_post(&dt->shared_thread_data->full_stack_sem) != 0) {
+                perror("Error while performing sem wait to empty_stack_sem");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    //Decrease exit_status from shared_data
+    if (pthread_mutex_lock(&dt->shared_thread_data->exit_status_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
     }
     
+    dt->shared_thread_data->exit_status -= 1;
+
+    if (pthread_mutex_unlock(&dt->shared_thread_data->exit_status_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
     closedir(dp);
     return NULL;
 }
 
 void* thread_stat_funct (void* args) {
     thread_stat_data_t* dt = (thread_stat_data_t*) args;
+    struct stat statbuf;
+    char path [PATHSIZE];
     
     //Defining thread name
     char myname[4] = "STAT";
-
     printf("[%s] Ready to consume!\n", myname);
+/*
+    //down (full)
+    if (sem_wait(&dt->shared_thread_data->full_stack_sem) != 0) {
+        perror("Error while performing sem wait to empty_stack_sem");
+        exit(EXIT_FAILURE);
+    }
+    //down (mutex)
+    if (pthread_mutex_lock(&dt->shared_thread_data->stack_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
+    }
+    
+    /*
+        Il thread STAT estrarrà, uno alla volta, i pathname da tale buffer e
+        determinerà la dimensione in byte del file associato. La coppia di informazioni
+        (pathname, dimensione) sarà passata, attravenso un'altra struttura dati, al thread
+        principale MAIN che si occuperà di mantenere un totale globale.
+    */
+/*
+    if (lstat(path, &statbuf) == -1) {
+        perror("Error while trying to read entry name");
+       exit(EXIT_FAILURE);
+    }
 
+    //up (mutex)
+    if (pthread_mutex_unlock(&dt->shared_thread_data->stack_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
+    }
+    //up (empty)
+    if (sem_post(&dt->shared_thread_data->empty_stack_sem) != 0) {
+        perror("Error while performing sem wait to empty_stack_sem");
+        exit(EXIT_FAILURE);
+    }
 
+*/
     return NULL;
 }
 
@@ -160,9 +228,15 @@ int main (int argc, char* argv[]) {
     
     //Initializing
     shared_thread_data->index = 0;
+    shared_thread_data->exit_status = num_dir;
 
     //Instantiate semaphore(s) or mutex(es)
-    if ((sem_init(&shared_thread_data->stack_sem, 0, STACKSIZE)) != 0){
+    if ((sem_init(&shared_thread_data->empty_stack_sem, 0, STACKSIZE)) != 0){
+        perror("Error while initializing stack semaphore");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((sem_init(&shared_thread_data->full_stack_sem, 0, 0)) != 0){
         perror("Error while initializing stack semaphore");
         exit(EXIT_FAILURE);
     }
