@@ -169,7 +169,7 @@ void* thread_stat_funct (void* args) {
     printf("[%s] Ready to consume.\n", myname);
 
     while (0) {
-        //Update exit status value      //mutex lock / unlock?
+        //Defining number of iterations
         iteration += 1;
         printf("[%s] Iteration n.%u\n", myname, iteration);
 
