@@ -46,10 +46,11 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 typedef struct shared_thread_data {
     //Stack infos
     char stack [STACKSIZE] [PATHSIZE];
-    short index;
+    unsigned short index;
 
     //Thread status
     unsigned short exit_status;
+    int thr_dir_num;
 
     //Semaphore(s)
     sem_t full_stack_sem;
@@ -78,7 +79,7 @@ typedef struct stat_data {
 //Shared data structure for thread STAT and MAIN
 typedef struct shared_data {
     stat_data_t stat_stack[STACKSIZE];
-    short index;
+    unsigned short index;
 
     sem_t full_stat_sem;
     sem_t empty_stat_sem;
@@ -140,7 +141,7 @@ void* thread_dir_funct (void* args) {
 
             //Insert item into stack
             strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
-            printf("[%s] Element %s inserted in stack at index %d\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
+            printf("[%s] Element %s inserted in stack at index %u\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
             //Increase stack index
             dt->shared_thread_data->index++;
 
@@ -157,14 +158,14 @@ void* thread_dir_funct (void* args) {
             }
         }
     }
-        //Decrease exit_status from shared_data
+    //Increase exit_status from shared_data
     if (pthread_mutex_lock(&dt->shared_thread_data->exit_status_mutex) != 0) {
         perror("Error while performing lock exit status mutex");
         exit(EXIT_FAILURE);
     }
 
     dt->shared_thread_data->exit_status += 1;
-    printf("[%s] Exit status decremented. Current value: %u\n", myname, dt->shared_thread_data->exit_status);
+    printf("[%s] Exit status incremented. Current value: %u\n", myname, dt->shared_thread_data->exit_status);
 
     if (pthread_mutex_unlock(&dt->shared_thread_data->exit_status_mutex) != 0) {
         perror("Error while performing unlock exit_status mutex");
@@ -181,16 +182,19 @@ void* thread_stat_funct (void* args) {
     unsigned int iteration = 0;
     char path [PATHSIZE];
     struct stat statbuf;
+    unsigned short exit_status = 0;
 
     
     //Defining thread name
     char myname[5] = "STAT\0";
     printf("[%s] Ready to consume.\n", myname);
 
-    while (0) {
+    printf("DEBUG: exit status %u ; num_dir %d, sh_d index %u\n", exit_status, dt->shared_thread_data->thr_dir_num, dt->shared_thread_data->index);
+    while ((exit_status < dt->shared_thread_data->thr_dir_num) && (dt->shared_thread_data->index != 0)) {
         //Defining number of iterations
         iteration += 1;
-        printf("[%s] Iteration n.%u\n", myname, iteration);
+        exit_status = dt->shared_thread_data->exit_status;
+        printf("[%s] Iteration n.%u with current exit status: %u\n", myname, iteration, exit_status);
 
         //down (full)
         if (sem_wait(&dt->shared_thread_data->full_stack_sem) != 0) {
@@ -257,6 +261,7 @@ void* thread_stat_funct (void* args) {
     */        
     }
 
+    printf("[%s] Job completed. Closing...\n", myname);
     return NULL;
 }
 
@@ -274,6 +279,7 @@ int main (int argc, char* argv[]) {
     //Initializing
     shared_thread_data->index = 0;
     shared_thread_data->exit_status = 0;
+    shared_thread_data->thr_dir_num = num_dir;
 
     //Instantiate semaphore(s) or mutex(es)
     if ((sem_init(&shared_thread_data->empty_stack_sem, 0, STACKSIZE)) != 0){
@@ -318,7 +324,7 @@ int main (int argc, char* argv[]) {
     }
     printf("[MAIN] Thread(s)_dir created successfully!\n");
 
-    sleep(3);
+    //sleep(2);
 
     //Create STAT thread
     printf("[MAIN] Instantiating the thread STAT\n");
@@ -334,6 +340,7 @@ int main (int argc, char* argv[]) {
     //// DO  STUFF ////
 
 
+    sleep(2);
 
 
     //// END STUFF ////
