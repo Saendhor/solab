@@ -44,8 +44,12 @@ I thread dovranno terminare spontaneamente al termine dei lavori.
 
 //Shared data structure for thread(s) DIR and STAT
 typedef struct shared_thread_data {
+    //Stack infos
     char stack [STACKSIZE] [PATHSIZE];
     short index;
+
+    //Thread status
+    unsigned short exit_status;
 
     //Semaphore(s)
     sem_t full_stack_sem;
@@ -53,6 +57,7 @@ typedef struct shared_thread_data {
 
     //Mutex(es)
     pthread_mutex_t stack_mutex;
+    pthread_mutex_t exit_status_mutex;
 
 } shared_thread_data_t;
 
@@ -152,7 +157,21 @@ void* thread_dir_funct (void* args) {
             }
         }
     }
+        //Decrease exit_status from shared_data
+    if (pthread_mutex_lock(&dt->shared_thread_data->exit_status_mutex) != 0) {
+        perror("Error while performing lock exit status mutex");
+        exit(EXIT_FAILURE);
+    }
 
+    dt->shared_thread_data->exit_status += 1;
+    printf("[%s] Exit status decremented. Current value: %u\n", myname, dt->shared_thread_data->exit_status);
+
+    if (pthread_mutex_unlock(&dt->shared_thread_data->exit_status_mutex) != 0) {
+        perror("Error while performing unlock exit_status mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("[%s] Job completed. Closing...\n", myname);
     closedir(dp);
     return NULL;
 }
@@ -254,19 +273,25 @@ int main (int argc, char* argv[]) {
     
     //Initializing
     shared_thread_data->index = 0;
+    shared_thread_data->exit_status = 0;
 
     //Instantiate semaphore(s) or mutex(es)
     if ((sem_init(&shared_thread_data->empty_stack_sem, 0, STACKSIZE)) != 0){
-        perror("Error while initializing stack semaphore");
+        perror("Error while initializing empty stack semaphore");
         exit(EXIT_FAILURE);
     }
 
     if ((sem_init(&shared_thread_data->full_stack_sem, 0, 0)) != 0){
-        perror("Error while initializing stack semaphore");
+        perror("Error while initializing full stack semaphore");
         exit(EXIT_FAILURE);
     }
 
     if (pthread_mutex_init(&shared_thread_data->stack_mutex, NULL) != 0) {
+        perror("Error while initializing stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_mutex_init(&shared_thread_data->exit_status_mutex, NULL) != 0) {
         perror("Error while initializing stack mutex");
         exit(EXIT_FAILURE);
     }
@@ -330,6 +355,29 @@ int main (int argc, char* argv[]) {
     }
     printf("[MAIN] Thread STAT successfully closed!\n");
 
+    //Close semaphore(s) and mutex(es)
+    if ((sem_destroy(&shared_thread_data->empty_stack_sem)) != 0){
+        perror("Error while destroying full stack semaphore");
+        exit(EXIT_FAILURE);
+    }
+    
+    if ((sem_destroy(&shared_thread_data->full_stack_sem)) != 0){
+        perror("Error while destroying full stack semaphore");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_mutex_destroy(&shared_thread_data->stack_mutex) != 0) {
+        perror("Error while destroying stack mutex");
+        exit(EXIT_FAILURE);
+    }
+    
+    if (pthread_mutex_destroy(&shared_thread_data->exit_status_mutex) != 0) {
+        perror("Error while destroying stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("[MAIN] All semaphores successfully destroyed!\n");
+
     //Free memory
     free(thread_stat_data);
     free(thread_dir_data);
@@ -337,6 +385,7 @@ int main (int argc, char* argv[]) {
 
     free(shared_thread_data);
     free(shared_data);
+
     printf("[MAIN] Memory successfully cleared!\n");
 
 
