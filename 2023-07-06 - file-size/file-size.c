@@ -50,7 +50,7 @@ typedef struct shared_thread_data {
 
     //Thread status
     unsigned short exit_status;
-    int thr_dir_num;
+    unsigned short thr_dir_num;
 
     //Semaphore(s)
     sem_t full_stack_sem;
@@ -141,7 +141,7 @@ void* thread_dir_funct (void* args) {
 
             //Insert item into stack
             strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
-            printf("[%s] Element %s inserted in stack at index %u\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
+            printf("[%s] Element '%s' inserted in stack at index %u\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
             //Increase stack index
             dt->shared_thread_data->index++;
 
@@ -165,7 +165,7 @@ void* thread_dir_funct (void* args) {
     }
 
     dt->shared_thread_data->exit_status += 1;
-    printf("[%s] Exit status incremented. Current value: %u\n", myname, dt->shared_thread_data->exit_status);
+    printf("[%s] Exit status incremented. Current value: %u/%u\n", myname, dt->shared_thread_data->exit_status, dt->shared_thread_data->thr_dir_num);
 
     if (pthread_mutex_unlock(&dt->shared_thread_data->exit_status_mutex) != 0) {
         perror("Error while performing unlock exit_status mutex");
@@ -189,12 +189,11 @@ void* thread_stat_funct (void* args) {
     char myname[5] = "STAT\0";
     printf("[%s] Ready to consume.\n", myname);
 
-    printf("DEBUG: exit status %u ; num_dir %d, sh_d index %u\n", exit_status, dt->shared_thread_data->thr_dir_num, dt->shared_thread_data->index);
-    while ((exit_status < dt->shared_thread_data->thr_dir_num) && (dt->shared_thread_data->index != 0)) {
+    while ((exit_status < dt->shared_thread_data->thr_dir_num)) {
         //Defining number of iterations
         iteration += 1;
         exit_status = dt->shared_thread_data->exit_status;
-        printf("[%s] Iteration n.%u with current exit status: %u\n", myname, iteration, exit_status);
+        printf("[%s] Iteration n.%u with exit status %u/%u\n", myname, iteration, exit_status, dt->shared_thread_data->thr_dir_num);
 
         //down (full)
         if (sem_wait(&dt->shared_thread_data->full_stack_sem) != 0) {
@@ -209,9 +208,10 @@ void* thread_stat_funct (void* args) {
 
         //Extract form stack
         strcpy(path, dt->shared_thread_data->stack[dt->shared_thread_data->index]);
-        printf("[%s] Item extracted from the stack: %s", myname, path);
+        printf("[%s] Item '%s' in the stack, size: %lu\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], sizeof(dt->shared_thread_data->stack[dt->shared_thread_data->index]));
+        printf("[%s] Item '%s' extracted from the stack\n", myname, path);
         //Fill selected stat slot with zero(s)
-        memset(dt->shared_thread_data->stack[dt->shared_thread_data->index], 0, PATHSIZE);
+        memset(dt->shared_thread_data->stack[dt->shared_thread_data->index], 0, sizeof(path));
         //Decrease index number
         dt->shared_thread_data->index++;
 
@@ -227,6 +227,7 @@ void* thread_stat_funct (void* args) {
         }
 
         //Determine size using lstat
+        printf("[%s] Reading '%s' stats\n", myname, path);
         if (lstat(path, &statbuf) == -1) {
             perror("Error while trying to read entry name");
             exit(EXIT_FAILURE);
@@ -324,15 +325,16 @@ int main (int argc, char* argv[]) {
     }
     printf("[MAIN] Thread(s)_dir created successfully!\n");
 
-    //sleep(2);
-
     //Create STAT thread
     printf("[MAIN] Instantiating the thread STAT\n");
     //Memory allocation for the existance of the thread
-    pthread_t thread_stat = (pthread_t) malloc ( sizeof(pthread_t));
+    pthread_t thread_stat = (pthread_t) malloc (sizeof(pthread_t));
     //Memory allocation for the data that will be used by the thread
     thread_stat_data_t* thread_stat_data = (thread_stat_data_t*) malloc(sizeof(thread_stat_data_t));
-    if (pthread_create(&thread_stat, NULL, &thread_stat_funct, &thread_stat_data) != 0) {
+    //Initialization of given data structures mentioned above
+    thread_stat_data->shared_thread_data = shared_thread_data;
+    thread_stat_data->shared_data = shared_data;
+    if (pthread_create(&thread_stat, NULL, &thread_stat_funct, thread_stat_data) != 0) {
         perror("Error while creating thread");
         exit(EXIT_FAILURE);
     }
