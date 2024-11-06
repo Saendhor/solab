@@ -159,6 +159,7 @@ void* thread_dir_funct (void* args) {
     }
     
     dt->shared_thread_data->exit_status -= 1;
+    printf("[%s] Exit status decremented. Current value: %u\n", myname, dt->shared_thread_data->exit_status);
 
     if (pthread_mutex_unlock(&dt->shared_thread_data->exit_status_mutex) != 0) {
         perror("Error while performing unlock exit_status mutex");
@@ -177,10 +178,12 @@ void* thread_stat_funct (void* args) {
 
     
     //Defining thread name
-    char myname[4] = "STAT";
-    printf("[%s] Ready to consume!\n", myname);
+    char myname[5] = "STAT\0";
+    printf("[%s] Ready to consume. Exit status: %u\n", myname, dt->shared_thread_data->exit_status);
 
-    while (exit_status != 0) {
+    while (exit_status > 0) {
+        //Update exit status value      //mutex lock / unlock?
+        exit_status = dt->shared_thread_data->exit_status;
 
         //down (full)
         if (sem_wait(&dt->shared_thread_data->full_stack_sem) != 0) {
@@ -263,7 +266,7 @@ int main (int argc, char* argv[]) {
     
     //Initializing
     shared_thread_data->index = 0;
-    shared_thread_data->exit_status = num_dir;
+    shared_thread_data->exit_status = (unsigned short) num_dir;
 
     //Instantiate semaphore(s) or mutex(es)
     if ((sem_init(&shared_thread_data->empty_stack_sem, 0, STACKSIZE)) != 0){
