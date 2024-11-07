@@ -1,7 +1,7 @@
-# File size (06 / 07 / 2023)
+# file-size (06 / 07 / 2023)
 Creare un programma file-size.c in linguaggio C che accetti invocazioni sulla riga di comando del tipo:
 ```bash
-    file-size <dir-1> <dir-2> ... <dir-n>
+file-size <dir-1> <dir-2> ... <dir-n>
 ```
 Il programma dovrà determinare la dimensione totale in byte dei file regolari direttamente contenuti all'interno delle cartelle indicate (senza ricorsione).
 
