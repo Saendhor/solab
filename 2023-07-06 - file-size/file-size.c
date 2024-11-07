@@ -1,34 +1,3 @@
-// file-size <dir-1> <dir-2> ... <dir-n>
-/*  
-Creare un programma file-size.c in linguaggio C che accetti invocazioni sulla riga di
-comando del tipo:
-    file-size <dir-1> <dir-2> ... <dir-n>
-
-Il programma dovrà determinare la dimensione totale in byte dei file regolari
-direttamente contenuti all'interno delle cartelle indicate (senza ricorsione).
-
-Al suo avvio il programma creerà n+1 thread:
-    • n thread DIR-i che si occuperanno di scansionare la cartella assegnata alla ricerca
-    di file regolari direttamente contenuti in essa (no ricorsione);
-    • un thread STAT che si occuperà di determinare la dimensione di ogni file regolare
-    individuato.
-
-Gli n thread DIR-i agiranno in parallelo e inseriranno, per ogni file regolare incontrato, il
-pathname dello stesso all'interno di un buffer condiviso di capienza prefissata (10
-pathname). Il thread STAT estrarrà, uno alla volta, i pathname da tale buffer e
-determinerà la dimensione in byte del file associato. La coppia di informazioni
-(pathname, dimensione) sarà passata, attravenso un'altra struttura dati, al thread
-principale MAIN che si occuperà di mantenere un totale globale.
-
-I thread si dovranno coordinare opportunamente tramite mutex e semafori numerici
-POSIX: il numero (minimo) e la modalità di impiego sono da determinare da parte dello
-studente. Si dovrà inoltre rispettare la struttura dell'output riportato nell'esempio a
-seguire.
-
-I thread dovranno terminare spontaneamente al termine dei lavori.
-
-*/
-
 #include <dirent.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -81,8 +50,11 @@ typedef struct shared_data {
     stat_data_t stat_stack[STACKSIZE];
     unsigned short index;
 
+    unsigned short exit_status;
+
     sem_t full_stat_sem;
     sem_t empty_stat_sem;
+    pthread_mutex_t exit_status_mutex;
     pthread_mutex_t stat_mutex;
 
 } shared_data_t;
@@ -245,7 +217,7 @@ void* thread_stat_funct (void* args) {
             perror("Error while trying to read entry name");
             exit(EXIT_FAILURE);
         }
-    /*    
+        
         //down (empty)
         if (sem_wait(&dt->shared_data->empty_stat_sem) != 0) {
             perror("Error while performing sem wait to empty_stack_sem");
@@ -258,7 +230,12 @@ void* thread_stat_funct (void* args) {
             exit(EXIT_FAILURE);
         }
 
-        //Insert item in stat stack
+        //Insert item (path / size) in stat stack
+        strcpy(dt->shared_data->stat_stack[dt->shared_data->index].pathname, path);
+        dt->shared_data->stat_stack[dt->shared_data->index].filesize = statbuf.st_size;
+        printf("[%s] New item (%s, %d) inserted in stack at index %u", myname, dt->shared_data->stat_stack[dt->shared_data->index].pathname, dt->shared_data->stat_stack[dt->shared_data->index].filesize, dt->shared_data->index);
+        //Increase counter
+        dt->shared_data->index = (dt->shared_data->index +1) % STACKSIZE;
 
         //up (mutex)
         if (pthread_mutex_unlock(&dt->shared_data->stat_mutex) != 0) {
@@ -268,11 +245,24 @@ void* thread_stat_funct (void* args) {
 
         //up (full)
         if (sem_post(&dt->shared_data->full_stat_sem) != 0) {
-            perror("Error while performing sem wait to empty_stack_sem");
+            perror("Error while performing sem post to full_stack_sem");
             exit(EXIT_FAILURE);
-        }
+        }       
+    }
 
-    */        
+    //down
+    if (pthread_mutex_lock(&dt->shared_data->exit_status_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    //Signal exit to main
+    dt->shared_data->exit_status = 1;
+
+    //up (mutex)
+    if (pthread_mutex_unlock(&dt->shared_data->exit_status_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
     }
 
     printf("[%s] Job completed. Closing...\n", myname);
@@ -352,13 +342,31 @@ int main (int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    //// DO  STUFF ////
+    unsigned short exit_status = 0;
+    while (exit_status == 0) {
+
+        if (pthread_mutex_lock(&shared_data->exit_status_mutex) != 0) {
+            perror("Error while performing lock stack mutex");
+            exit(EXIT_FAILURE);
+        }
+
+        //Check for exit status in shared data
+        exit_status = shared_data->exit_status;
+
+        if (pthread_mutex_unlock(&shared_data->exit_status_mutex) != 0) {
+            perror("Error while performing lock stack mutex");
+            exit(EXIT_FAILURE);
+        }
+        printf("[MAIN] Exit status from STAT: %u", exit_status);
+
+        //down (full)
+        //down (mutex)
+        //up (mutex)
+        //up (empty)
 
 
-    sleep(2);
+    }
 
-
-    //// END STUFF ////
     printf("[MAIN] Job done! Terminating execution gracefully...\n");
 
     //Close thread(s) DIR
@@ -413,24 +421,3 @@ int main (int argc, char* argv[]) {
 
     return 0;
 }
-
-/*
-
-ESEMPIO
-
-$ ./file-size /usr/bin /usr/include/
-[D-1] scansione della cartella '/usr/bin'...
-[D-2] scansione della cartella '/usr/include/'...
-[D-2] trovato il file 'aio.h' in '/usr/include/'
-[D-2] trovato il file 'aliases.h' in '/usr/include/'
-[STAT] il file '/usr/include/aio.h' ha dimensione 7457 byte
-[D-1] trovato il file '411toppm' in '/usr/bin'
-[STAT] il file '/usr/include/aliases.h' ha dimensione 2032 byte
-[MAIN] con il file '/usr/include/aio.h' il totale parziale è di 7457 byte
-[MAIN] con il file '/usr/include/aliases.h' il totale parziale è di 9489 byte
-[D-1] trovato il file 'add-apt-repository' in '/usr/bin'
-[STAT] il file '/usr/bin/411toppm' ha dimensione 18504 byte
-...
-[MAIN] il totale finale è di 166389312 byte
-
-*/
