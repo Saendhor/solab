@@ -192,7 +192,18 @@ void* thread_stat_funct (void* args) {
     while ((exit_status < dt->shared_thread_data->thr_dir_num)) {
         //Defining number of iterations
         iteration += 1;
+        //Getting exit status
+        if (pthread_mutex_lock(&dt->shared_thread_data->exit_status_mutex) != 0) {
+            perror("Error while performing lock exit status mutex");
+            exit(EXIT_FAILURE);
+        }
+
         exit_status = dt->shared_thread_data->exit_status;
+
+        if (pthread_mutex_unlock(&dt->shared_thread_data->exit_status_mutex) != 0) {
+            perror("Error while performing unlock exit_status mutex");
+            exit(EXIT_FAILURE);
+        }
         printf("[%s] Iteration n.%u with exit status %u/%u\n", myname, iteration, exit_status, dt->shared_thread_data->thr_dir_num);
 
         //down (full)
@@ -208,13 +219,15 @@ void* thread_stat_funct (void* args) {
 
         //Decrease index number
         dt->shared_thread_data->index = (dt->shared_thread_data->index -1) % STACKSIZE;
-        //Extract form stack
-        strcpy(path, dt->shared_thread_data->stack[dt->shared_thread_data->index]);
-        printf("[%s] Item '%s' extracted from the stack at index %u\n", myname, path, dt->shared_thread_data->index);
-        //Fill selected stat slot with zero(s)
-        memset(dt->shared_thread_data->stack[dt->shared_thread_data->index], 0, sizeof(path));
-    
 
+        if (dt->shared_thread_data->stack[dt->shared_thread_data->index] != NULL) {
+            //Extract form stack
+            strcpy(path, dt->shared_thread_data->stack[dt->shared_thread_data->index]);
+            printf("[%s] Item '%s' extracted from the stack at index %u\n", myname, path, dt->shared_thread_data->index);
+            //Fill selected stat slot with zero(s)
+            memset(dt->shared_thread_data->stack[dt->shared_thread_data->index], 0, sizeof(path));
+        }
+        
         //up (mutex)
         if (pthread_mutex_unlock(&dt->shared_thread_data->stack_mutex) != 0) {
             perror("Error while performing unlock stack mutex");
