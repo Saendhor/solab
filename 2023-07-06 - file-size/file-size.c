@@ -178,6 +178,7 @@ void* thread_stat_funct (void* args) {
         }
         printf("[%s] Iteration n.%u with exit status %u/%u\n", myname, iteration, exit_status, dt->shared_thread_data->thr_dir_num);
 
+        // THREAD DIR
         //down (full)
         if (sem_wait(&dt->shared_thread_data->full_stack_sem) != 0) {
             perror("Error while performing sem wait to empty_stat_sem");
@@ -217,7 +218,8 @@ void* thread_stat_funct (void* args) {
             perror("Error while trying to read entry name");
             exit(EXIT_FAILURE);
         }
-        
+
+        // THREAD MAIN        
         //down (empty)
         if (sem_wait(&dt->shared_data->empty_stat_sem) != 0) {
             perror("Error while performing sem wait to empty_stack_sem");
@@ -233,7 +235,7 @@ void* thread_stat_funct (void* args) {
         //Insert item (path / size) in stat stack
         strcpy(dt->shared_data->stat_stack[dt->shared_data->index].pathname, path);
         dt->shared_data->stat_stack[dt->shared_data->index].filesize = statbuf.st_size;
-        printf("[%s] New item (%s, %d) inserted in stack at index %u", myname, dt->shared_data->stat_stack[dt->shared_data->index].pathname, dt->shared_data->stat_stack[dt->shared_data->index].filesize, dt->shared_data->index);
+        printf("[%s] New item (%s, %d) inserted in stack at index %u\n", myname, dt->shared_data->stat_stack[dt->shared_data->index].pathname, dt->shared_data->stat_stack[dt->shared_data->index].filesize, dt->shared_data->index);
         //Increase counter
         dt->shared_data->index = (dt->shared_data->index +1) % STACKSIZE;
 
@@ -250,7 +252,7 @@ void* thread_stat_funct (void* args) {
         }       
     }
 
-    //down
+    //down (mutex)
     if (pthread_mutex_lock(&dt->shared_data->exit_status_mutex) != 0) {
         perror("Error while performing lock stack mutex");
         exit(EXIT_FAILURE);
@@ -342,8 +344,11 @@ int main (int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    printf("[MAIN] Starting total size count\n");
     unsigned short exit_status = 0;
+    unsigned int total_filesize = 0;
     while (exit_status == 0) {
+        printf("[MAIN] Total file size: %u\n", total_filesize);
 
         if (pthread_mutex_lock(&shared_data->exit_status_mutex) != 0) {
             perror("Error while performing lock stack mutex");
@@ -357,18 +362,48 @@ int main (int argc, char* argv[]) {
             perror("Error while performing lock stack mutex");
             exit(EXIT_FAILURE);
         }
-        printf("[MAIN] Exit status from STAT: %u", exit_status);
+        printf("[MAIN] Exit status from STAT: %u\n", exit_status);
 
         //down (full)
+        if (sem_wait(&shared_data->full_stat_sem) != 0) {
+            perror("Error while performing sem wait to empty_stat_sem");
+            exit(EXIT_FAILURE);
+        }
         //down (mutex)
+        if (pthread_mutex_lock(&shared_data->stat_mutex) != 0) {
+            perror("Error while performing lock stack mutex");
+            exit(EXIT_FAILURE);
+        }
+
+        //Decrease index number
+        shared_data->index = (shared_data->index -1) % STACKSIZE;
+
+        if (shared_data->stat_stack[shared_data->index].filesize != 0) {
+            //Extract form stack
+            printf("[MAIN] Item '(%s/%u)' extracted from the stack at index %u\n", shared_data->stat_stack[shared_data->index].pathname, shared_data->stat_stack[shared_data->index].filesize, shared_data->index);
+            //Increase total
+            total_filesize += shared_data->stat_stack[shared_data->index].filesize;
+            printf("[MAIN] Total size of file read: %u\n", total_filesize);
+            //Fill selected stat slot with zero(s)
+            memset(shared_data->stat_stack[shared_data->index].pathname, 0, sizeof(shared_data->stat_stack[shared_data->index].pathname));
+            shared_data->stat_stack[shared_data->index].filesize = 0;
+
+        }
+        
         //up (mutex)
+        if (pthread_mutex_unlock(&shared_data->stat_mutex) != 0) {
+            perror("Error while performing unlock stack mutex");
+            exit(EXIT_FAILURE);
+        }
         //up (empty)
-
-
+        if (sem_post(&shared_data->empty_stat_sem) != 0) {
+            perror("Error while performing sem wait to empty_stack_sem");
+            exit(EXIT_FAILURE);
+        }
     }
+    printf("[MAIN] Job done! Total size of file read: %u\n", total_filesize);
 
-    printf("[MAIN] Job done! Terminating execution gracefully...\n");
-
+    printf("[MAIN] Terminating execution gracefully...\n");
     //Close thread(s) DIR
     for (int i = 0; i < num_dir; i++) {
         if (pthread_join(thread_dir[i], NULL) != 0){
