@@ -143,7 +143,7 @@ void* thread_dir_funct (void* args) {
             strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
             printf("[%s] Element '%s' inserted in stack at index %u\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
             //Increase stack index
-            dt->shared_thread_data->index += (dt->shared_thread_data->index) % STACKSIZE;
+            dt->shared_thread_data->index = (dt->shared_thread_data->index +1) % STACKSIZE;
 
             //Leave critical region
             //up (mutex)
@@ -206,14 +206,14 @@ void* thread_stat_funct (void* args) {
             exit(EXIT_FAILURE);
         }
 
+        //Decrease index number
+        dt->shared_thread_data->index = (dt->shared_thread_data->index -1) % STACKSIZE;
         //Extract form stack
         strcpy(path, dt->shared_thread_data->stack[dt->shared_thread_data->index]);
-        printf("[%s] Item '%s' in the stack, size: %lu\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], sizeof(dt->shared_thread_data->stack[dt->shared_thread_data->index]));
-        printf("[%s] Item '%s' extracted from the stack\n", myname, path);
+        printf("[%s] Item '%s' extracted from the stack at index %u\n", myname, path, dt->shared_thread_data->index);
         //Fill selected stat slot with zero(s)
         memset(dt->shared_thread_data->stack[dt->shared_thread_data->index], 0, sizeof(path));
-        //Decrease index number
-        dt->shared_thread_data->index -= (dt->shared_thread_data->index) % STACKSIZE;
+    
 
         //up (mutex)
         if (pthread_mutex_unlock(&dt->shared_thread_data->stack_mutex) != 0) {
