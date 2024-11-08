@@ -1,0 +1,24 @@
+Answer 01:
+You need to pass the address of a void * variable to pthread_join -- it
+will get filled in with the exit value.
+That void * then should be cast back to whatever type was originally stored
+into it by the pthread_exit call:
+
+# Sample code:
+
+    for(j = 0 ; j < i ; ++j) {
+        void *returnValue;
+        pthread_join( tid[j], &returnValue);  /* BLOCK */
+        printf("%zd\n",  (size_t)(off_t)returnValue);
+    }
+
+Answer 02:
+
+# Sample code
+    for(j = 0 ; j < i ; ++j) {
+        int returnValue;
+        pthread_join( tid[j], (void **)&returnValue);  /* BLOCK */
+        printf("%d\n",  returnValue);
+    }
+
+SOURCE: https://stackoverflow.com/questions/13315575/c-pthread-join-return-value
