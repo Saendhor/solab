@@ -16,6 +16,7 @@ typedef struct shared_thread_data {
     //Stack infos
     char stack [STACKSIZE] [PATHSIZE];
     unsigned short index;
+    unsigned int total_inserted_items;
 
     //Thread status
     unsigned short exit_status;
@@ -50,6 +51,7 @@ typedef struct shared_data {
     //Stack infos
     stat_data_t stat_stack[STACKSIZE];
     unsigned short index;
+    unsigned int total_extracted_items;
 
     //Thread status
     unsigned short exit_status;
@@ -104,7 +106,6 @@ void* thread_dir_funct (void* args) {
         
         //Add string to shared data stack
         if (S_ISREG(statbuf.st_mode)) {
-            //Enter critical region
             //down (empty)
             if (sem_wait(&dt->shared_thread_data->empty_stack_sem) != 0) {
                 perror("Error while performing sem wait to empty_stack_sem");
@@ -120,10 +121,10 @@ void* thread_dir_funct (void* args) {
             strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
             printf("[%s] Element '%s' inserted in stack at index %u\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
             
-            //Increase stack index
+            //Increase indexes
             dt->shared_thread_data->index = (dt->shared_thread_data->index +1) % STACKSIZE;
+            dt->shared_thread_data->total_inserted_items += 1;
 
-            //Leave critical region
             //up (mutex)
             if (pthread_mutex_unlock(&dt->shared_thread_data->stack_mutex) != 0) {
                 perror("Error while performing unlock to stack mutex");
@@ -161,13 +162,15 @@ void* thread_stat_funct (void* args) {
     char path [PATHSIZE];
     struct stat statbuf;
     unsigned short exit_status = 0;
+    unsigned int total_inserted_items = 1;
+    unsigned int total_extracted_items = 0;
 
     
     //Defining thread name
     char myname[5] = "STAT\0";
     printf("[%s] Ready to consume.\n", myname);
 
-    while ((exit_status < dt->shared_thread_data->thr_dir_num) && (dt->shared_thread_data->stack[0] != NULL)) {
+    while ((exit_status < dt->shared_thread_data->thr_dir_num) && (total_extracted_items < total_inserted_items)) {
         //Defining number of iterations
         iteration += 1;
         //Getting exit status
@@ -177,6 +180,7 @@ void* thread_stat_funct (void* args) {
         }
 
         exit_status = dt->shared_thread_data->exit_status;
+        total_inserted_items = dt->shared_thread_data->total_inserted_items;
 
         if (pthread_mutex_unlock(&dt->shared_thread_data->exit_status_mutex) != 0) {
             perror("Error while performing unlock exit_status mutex");
@@ -207,6 +211,7 @@ void* thread_stat_funct (void* args) {
             
             //Fill selected stat slot with zero(s)
             memset(dt->shared_thread_data->stack[dt->shared_thread_data->index], 0, sizeof(path));
+
         }
         
         //up (mutex)
@@ -247,6 +252,8 @@ void* thread_stat_funct (void* args) {
         
         //Increase counter
         dt->shared_data->index = (dt->shared_data->index +1) % STACKSIZE;
+        dt->shared_data->total_extracted_items += 1;
+        total_extracted_items = dt->shared_data->total_extracted_items;
 
         //up (mutex)
         if (pthread_mutex_unlock(&dt->shared_data->stat_mutex) != 0) {
@@ -295,9 +302,11 @@ int main (int argc, char* argv[]) {
     shared_thread_data->index = 0;
     shared_thread_data->exit_status = 0;
     shared_thread_data->thr_dir_num = num_dir;
+    shared_thread_data->total_inserted_items = 0;
 
     shared_data->index = 0;
     shared_data->exit_status = 0;
+    shared_data->total_extracted_items = 0;
 
     //Instantiate semaphore(s) or mutex(es)
     // SHARED THREAD DATA
@@ -383,7 +392,8 @@ int main (int argc, char* argv[]) {
     unsigned int total_filesize = 0;
     unsigned int total_read_entries = 0;
     unsigned int iteration = 0;
-    while (exit_status == 0 || shared_data->stat_stack[0].filesize != 0) {
+    unsigned int stat_items = 1;
+    while (exit_status == 0 && total_read_entries < stat_items) {
         iteration += 1;
         printf("[MAIN] Total file size at iteration %u is: %u\n", iteration, total_filesize);
 
@@ -395,6 +405,10 @@ int main (int argc, char* argv[]) {
 
         //Check for exit status in shared data
         exit_status = shared_data->exit_status;
+        stat_items = shared_data->total_extracted_items;
+        if (stat_items == 0){
+            stat_items += 1;
+        }
 
         //up (mutex)
         if (pthread_mutex_unlock(&shared_data->exit_status_mutex) != 0) {
