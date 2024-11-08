@@ -35,3 +35,5 @@ $ ./file-size /usr/bin /usr/include/
 ...
 [MAIN] il totale finale è di 166389312 byte
 ```
+
+## Repo notes:

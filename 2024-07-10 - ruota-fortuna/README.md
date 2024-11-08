@@ -78,3 +78,5 @@ $ ./ruota-fortuna 3 4 frasi.txt
 [M] frase completata; punteggi attuali: G1:10300 G2:20200 G3:15300
 [M] questa era l'ultima partita: il vincitore è G2
 ```
+
+# Repo notes:

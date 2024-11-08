@@ -61,3 +61,5 @@ risulta assegnato
 [J] sono state svolte 7 aste di cui 5 andate assegnate e 2 andate a vuoto; il totale raccolto è
 di 3344 EUR
 ```
+
+# Repo notes:

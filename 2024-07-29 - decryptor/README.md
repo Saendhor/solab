@@ -43,3 +43,5 @@ $ ./decryptor keys.txt ciphertext.txt plaintext.txt
 [K2] sto decifrando la frase di 21 caratteri passata...
 [M] la riga è stata decifrata in: IS THIS JUST FANTASY ?
 ```
+
+# Repo notes:

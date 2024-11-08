@@ -61,3 +61,5 @@ di produzione di 4073 €
 ```
 
 I file dell'esempio sono forniti a corredo: letterine-1.txt, letterine-2.txt, letterine-3.txt, regali.txt, buoni-cattivi.txt.
+
+# Repo notes:

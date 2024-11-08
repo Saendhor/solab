@@ -61,3 +61,5 @@ english'
 [WRITER] scrittura del file 'login.defs' completata
 [MAIN] duplicazione dei 2 file completata
 ```
+
+# Repo notes:

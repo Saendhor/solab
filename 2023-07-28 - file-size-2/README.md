@@ -39,3 +39,5 @@ l'insieme ha adesso 2 elementi
 [MAIN] i thread secondari hanno terminato e il totale finale è di 166389312
 byte
 ```
+
+# Repo notes:

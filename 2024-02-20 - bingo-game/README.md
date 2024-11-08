@@ -54,3 +54,5 @@ D: il giocatore n.3 ha vinto il Bingo con la scheda (23,12,43,34,19) / (4,13,1,7
 (41,32,70,17,66)
 D: fine del gioco
 ```
+
+# Repo notes:

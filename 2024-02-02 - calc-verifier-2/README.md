@@ -70,3 +70,5 @@ $ ./calc-verifier-2 calc1.txt calc2.txt
 [CALC-1] computazione terminata in modo corretto: 3512341814982520
 [MAIN] verifiche completate con successo: 2/2
 ```
+
+# Repo notes:
