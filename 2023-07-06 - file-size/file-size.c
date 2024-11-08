@@ -47,15 +47,20 @@ typedef struct stat_data {
 
 //Shared data structure for thread STAT and MAIN
 typedef struct shared_data {
+    //Stack infos
     stat_data_t stat_stack[STACKSIZE];
     unsigned short index;
 
+    //Thread status
     unsigned short exit_status;
 
+    //Semaphore(s)
     sem_t full_stat_sem;
     sem_t empty_stat_sem;
-    pthread_mutex_t exit_status_mutex;
+
+    //Mutex(es)
     pthread_mutex_t stat_mutex;
+    pthread_mutex_t exit_status_mutex;
 
 } shared_data_t;
 
@@ -114,6 +119,7 @@ void* thread_dir_funct (void* args) {
             //Insert item into stack
             strcpy(dt->shared_thread_data->stack[dt->shared_thread_data->index], path);
             printf("[%s] Element '%s' inserted in stack at index %u\n", myname, dt->shared_thread_data->stack[dt->shared_thread_data->index], dt->shared_thread_data->index);
+            
             //Increase stack index
             dt->shared_thread_data->index = (dt->shared_thread_data->index +1) % STACKSIZE;
 
@@ -161,7 +167,7 @@ void* thread_stat_funct (void* args) {
     char myname[5] = "STAT\0";
     printf("[%s] Ready to consume.\n", myname);
 
-    while ((exit_status < dt->shared_thread_data->thr_dir_num)) {
+    while ((exit_status < dt->shared_thread_data->thr_dir_num) && (dt->shared_thread_data->stack[0] != NULL)) {
         //Defining number of iterations
         iteration += 1;
         //Getting exit status
@@ -194,9 +200,11 @@ void* thread_stat_funct (void* args) {
         dt->shared_thread_data->index = (dt->shared_thread_data->index -1) % STACKSIZE;
 
         if (dt->shared_thread_data->stack[dt->shared_thread_data->index] != NULL) {
+            
             //Extract form stack
             strcpy(path, dt->shared_thread_data->stack[dt->shared_thread_data->index]);
             printf("[%s] Item '%s' extracted from the stack at index %u\n", myname, path, dt->shared_thread_data->index);
+            
             //Fill selected stat slot with zero(s)
             memset(dt->shared_thread_data->stack[dt->shared_thread_data->index], 0, sizeof(path));
         }
@@ -236,6 +244,7 @@ void* thread_stat_funct (void* args) {
         strcpy(dt->shared_data->stat_stack[dt->shared_data->index].pathname, path);
         dt->shared_data->stat_stack[dt->shared_data->index].filesize = statbuf.st_size;
         printf("[%s] New item (%s, %d) inserted in stack at index %u\n", myname, dt->shared_data->stat_stack[dt->shared_data->index].pathname, dt->shared_data->stat_stack[dt->shared_data->index].filesize, dt->shared_data->index);
+        
         //Increase counter
         dt->shared_data->index = (dt->shared_data->index +1) % STACKSIZE;
 
@@ -259,7 +268,7 @@ void* thread_stat_funct (void* args) {
     }
 
     //Signal exit to main
-    dt->shared_data->exit_status = 1;
+    dt->shared_data->exit_status += 1;
 
     //up (mutex)
     if (pthread_mutex_unlock(&dt->shared_data->exit_status_mutex) != 0) {
@@ -287,7 +296,11 @@ int main (int argc, char* argv[]) {
     shared_thread_data->exit_status = 0;
     shared_thread_data->thr_dir_num = num_dir;
 
+    shared_data->index = 0;
+    shared_data->exit_status = 0;
+
     //Instantiate semaphore(s) or mutex(es)
+    // SHARED THREAD DATA
     if ((sem_init(&shared_thread_data->empty_stack_sem, 0, STACKSIZE)) != 0){
         perror("Error while initializing empty stack semaphore");
         exit(EXIT_FAILURE);
@@ -304,6 +317,27 @@ int main (int argc, char* argv[]) {
     }
 
     if (pthread_mutex_init(&shared_thread_data->exit_status_mutex, NULL) != 0) {
+        perror("Error while initializing stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    // SHARED DATA
+    if ((sem_init(&shared_data->empty_stat_sem, 0, STACKSIZE)) != 0){
+        perror("Error while initializing empty stack semaphore");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((sem_init(&shared_data->full_stat_sem, 0, 0)) != 0){
+        perror("Error while initializing full stack semaphore");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_mutex_init(&shared_data->stat_mutex, NULL) != 0) {
+        perror("Error while initializing stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_mutex_init(&shared_data->exit_status_mutex, NULL) != 0) {
         perror("Error while initializing stack mutex");
         exit(EXIT_FAILURE);
     }
@@ -347,9 +381,13 @@ int main (int argc, char* argv[]) {
     printf("[MAIN] Starting total size count\n");
     unsigned short exit_status = 0;
     unsigned int total_filesize = 0;
-    while (exit_status == 0) {
-        printf("[MAIN] Total file size: %u\n", total_filesize);
+    unsigned int total_read_entries = 0;
+    unsigned int iteration = 0;
+    while (exit_status == 0 || shared_data->stat_stack[0].filesize != 0) {
+        iteration += 1;
+        printf("[MAIN] Total file size at iteration %u is: %u\n", iteration, total_filesize);
 
+        //down (mutex)
         if (pthread_mutex_lock(&shared_data->exit_status_mutex) != 0) {
             perror("Error while performing lock stack mutex");
             exit(EXIT_FAILURE);
@@ -358,6 +396,7 @@ int main (int argc, char* argv[]) {
         //Check for exit status in shared data
         exit_status = shared_data->exit_status;
 
+        //up (mutex)
         if (pthread_mutex_unlock(&shared_data->exit_status_mutex) != 0) {
             perror("Error while performing lock stack mutex");
             exit(EXIT_FAILURE);
@@ -379,14 +418,20 @@ int main (int argc, char* argv[]) {
         shared_data->index = (shared_data->index -1) % STACKSIZE;
 
         if (shared_data->stat_stack[shared_data->index].filesize != 0) {
+            
             //Extract form stack
             printf("[MAIN] Item '(%s/%u)' extracted from the stack at index %u\n", shared_data->stat_stack[shared_data->index].pathname, shared_data->stat_stack[shared_data->index].filesize, shared_data->index);
+            
             //Increase total
             total_filesize += shared_data->stat_stack[shared_data->index].filesize;
             printf("[MAIN] Total size of file read: %u\n", total_filesize);
+
             //Fill selected stat slot with zero(s)
             memset(shared_data->stat_stack[shared_data->index].pathname, 0, sizeof(shared_data->stat_stack[shared_data->index].pathname));
             shared_data->stat_stack[shared_data->index].filesize = 0;
+
+            //Increase total read entries
+            total_read_entries += 1;
 
         }
         
@@ -401,7 +446,7 @@ int main (int argc, char* argv[]) {
             exit(EXIT_FAILURE);
         }
     }
-    printf("[MAIN] Job done! Total size of file read: %u\n", total_filesize);
+    printf("[MAIN] Job done! Total size of %u files read %u\n", total_read_entries, total_filesize);
 
     printf("[MAIN] Terminating execution gracefully...\n");
     //Close thread(s) DIR
