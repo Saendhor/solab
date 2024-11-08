@@ -1,0 +1,10 @@
+Primo semestre:
+Architettura degli elaboratori [9 CFU]
+Algebra lineare e geometria euclidea [6 CFU]
+Programmazione 1 [9 CFU]
+Strutture discrete [6 CFU]
+
+Secondo semestre:
+Elementi di analisi matematica [6 CFU]
+Fondamenti di informatica [9 CFU]
+Programmazione 2 [9 CFU]

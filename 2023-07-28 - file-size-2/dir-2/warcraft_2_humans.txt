@@ -1,0 +1,24 @@
+Warcraft 2 Human units
++ Civilian:
+    > Peasant.
+
++ Ground:
+    Footman;
+    Elven Archer;
+    Elven Ranger;
+    Knight;
+    Paladin;
+    Ballista;
+    Demolition Squad;
+    Mage.
+
++ Air:
+    Gnomish Flying Machine;
+    Gryphon Rider.
+
++ Naval
+    Oil Tankers;
+    Transports;
+    Elven Destroyer;
+    Battleship;
+    Gnomish Submarine.

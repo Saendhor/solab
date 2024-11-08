@@ -1,0 +1,24 @@
+Warcraft 2 Orc units
++ Civilian:
+    > Peons.
+
++ Ground:
+    Grunt;
+    Troll Axethrower;
+    Troll Berserker;
+    Ogre;
+    Ogre-Mage;
+    Catapult;
+    Goblin Sappers;
+    Death Knight.
+
++ Air:
+    Goblin Zeppelin;
+    Dragon.
+
++ Naval
+    Oil Tankers;
+    Transports;
+    Troll Destroyer;
+    Ogre Juggernaught;
+    Giant Turtle.

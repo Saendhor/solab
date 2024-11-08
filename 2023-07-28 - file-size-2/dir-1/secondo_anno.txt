@@ -1,0 +1,10 @@
+Primo semestre:
+Algoritmi [9 CFU]
+Basi di Dati [9 CFU]
+Elementi di Analisi Matematica 2 [6 CFU]
+Interazione e Multimedia [9 CFU]
+
+Secondo semestre:
+Ingegneria del Software [9 CFU]
+Reti di Calcolatori [9 CFU]
+Sistemi Operativi [9 CFU]
