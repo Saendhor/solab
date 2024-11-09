@@ -134,17 +134,18 @@ void deallocate_tree (node_t* root) {
 
     //Checks for right subtree recursively
     if (root->right != NULL) {
-        printf("[BST] Deallocating right node with key %d\n", root->right->key);
+        //printf("[BST] Deallocating right node with key %d\n", root->right->key);
         deallocate_tree(root->right);
     }
     
     //Checks for left subtree recursively
     if (root->left != NULL) {
-        printf("[BST] Deallocating left node with key %d\n", root->left->key);
+        //printf("[BST] Deallocating left node with key %d\n", root->left->key);
         deallocate_tree(root->left);
     }
 
     //If node does not have right and left nodes then it gets deallocated from memory
+    printf("[BST] Deallocating node with key %d\n", root->key);
     free(root);
 }
 

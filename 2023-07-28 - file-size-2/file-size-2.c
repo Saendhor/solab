@@ -35,16 +35,11 @@ typedef struct thread_data {
 
 
 void* thread_dir (void* args) {
-    /*
-        - scansionare la cartella assegnata alla ricerca
-        di file regolari direttamente contenuti in essa (no ricorsione)
-        - per ogni file incontrato ne determinerà la dimensione in byte
-        e inserirà il numero in una struttura dati number_set condivisa;
-    */
     thread_data_t* dt = (thread_data_t*) args;
     DIR* dp;
     struct dirent* entry;
     struct stat statbuf;
+    char path[PATHSIZE];
     
     //Conveniently defining name
     char myname[NAMESIZE];
@@ -60,8 +55,33 @@ void* thread_dir (void* args) {
         //Excluding '.' and '..' directories to printf
         if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")){
             printf("[%s] Reading item '%s'\n", myname, entry->d_name);
+            //Manually creating path
+            snprintf(path, PATHSIZE, "%s/%s", dt->assigned_dir, entry->d_name);
+
+            printf("[%s] Checking size of '%s'\n", myname, path);
+            if (lstat(path, &statbuf) == -1) {
+                perror("Error while trying to read entry name");
+                exit(EXIT_FAILURE);
+            }
         }
         
+        if (S_ISREG(statbuf.st_mode)) {
+            printf("[%s] '%s' is a regular file with size %d\n", myname, path, (int)statbuf.st_size);
+
+            if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
+                perror("Error while performing lock stack mutex");
+                exit(EXIT_FAILURE);
+            }
+
+            //Insert item into BST
+            insert_key(&dt->shared_data->number_set, (int)statbuf.st_size);
+
+            if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+                perror("Error while performing lock stack mutex");
+                exit(EXIT_FAILURE);
+            }
+        }
+        memset(path, 0, PATHSIZE);
     }
 
     //Closing
@@ -160,7 +180,7 @@ int main (int argc, char* argv[]) {
 
     //MAIN STUFF
     sleep(1);
-
+    
     //Closing thread DIR(s)
     printf("[MAIN] Closing %d thread(s) DIR\n", num_dir);
     for (int i = 0; i < num_dir; i++) {
@@ -169,6 +189,8 @@ int main (int argc, char* argv[]) {
             exit(EXIT_FAILURE);
         }
     }
+
+    //print_tree(shared_data->number_set);
 
     //Closing thread ADD(s)
     printf("[MAIN] Closing %d thread(s) DIR\n", NUM_ADD_THR);
