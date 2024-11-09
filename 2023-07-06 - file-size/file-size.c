@@ -77,6 +77,7 @@ void* thread_dir_funct (void* args) {
     DIR* dp;
     struct dirent* entry;
     struct stat statbuf;
+    char path[PATHSIZE];
 
     //Defining thread name
     char myname[6];
@@ -96,15 +97,13 @@ void* thread_dir_funct (void* args) {
         //Excluding '.' and '..' directories to printf
         if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")){
             printf("[%s] Reading item '%s'\n", myname, entry->d_name);
-        }
-        
-        //Manually creating path
-        char path[PATHSIZE];
-        snprintf(path, PATHSIZE, "%s/%s", dt->pathname, entry->d_name);
-        
-        if (lstat(path, &statbuf) == -1) {
-            perror("Error while trying to read entry name");
-            exit(EXIT_FAILURE);
+            //Manually creating path
+            snprintf(path, PATHSIZE, "%s/%s", dt->pathname, entry->d_name);
+            
+            if (lstat(path, &statbuf) == -1) {
+                perror("Error while trying to read entry name");
+                exit(EXIT_FAILURE);
+            }
         }
         
         //Add string to shared data stack
