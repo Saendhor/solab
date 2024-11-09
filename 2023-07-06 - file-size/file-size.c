@@ -93,7 +93,10 @@ void* thread_dir_funct (void* args) {
     printf("[%s] Scanning directory's list\n", myname);
     while ((entry = readdir(dp)) != NULL){
 
-        printf("[%s] Reading item '%s'\n", myname, entry->d_name);
+        //Excluding '.' and '..' directories to printf
+        if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")){
+            printf("[%s] Reading item '%s'\n", myname, entry->d_name);
+        }
         
         //Manually creating path
         char path[PATHSIZE];
