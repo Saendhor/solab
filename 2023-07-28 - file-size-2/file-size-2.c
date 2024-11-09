@@ -1,9 +1,12 @@
 #include "my_bst.h"
+
+#include <dirent.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #define NAMESIZE 16
@@ -24,7 +27,7 @@ typedef struct shared_data {
 
 typedef struct thread_data {
     unsigned short id;
-    char path[PATHSIZE];
+    char assigned_dir[PATHSIZE];
 
     shared_data_t* shared_data;
 
@@ -39,15 +42,27 @@ void* thread_dir (void* args) {
         e inserirà il numero in una struttura dati number_set condivisa;
     */
     thread_data_t* dt = (thread_data_t*) args;
+    DIR* dp;
+    struct dirent* entry;
+    struct stat statbuf;
     
     //Conveniently defining name
     char myname[NAMESIZE];
     sprintf(myname, "DIR-%d", dt->id);
 
+    printf("[%s] Assigned directory: '%s'\n", myname, dt->assigned_dir);
+    if ((dp = opendir(dt->assigned_dir)) == NULL) {
+        perror("Error while trying to open directory at given path");
+        exit(EXIT_FAILURE);
+    }
 
-    printf("[%s] Assigned directory: '%s'\n", myname, dt->path);
-
-
+    while ((entry = readdir(dp)) != NULL) {
+        //Excluding '.' and '..' directories to printf
+        if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")){
+            printf("[%s] Reading item '%s'\n", myname, entry->d_name);
+        }
+        
+    }
 
     //Closing
     printf("[%s] Job completed. Closing thread\n", myname);
@@ -66,7 +81,7 @@ void* thread_add (void* args) {
     sprintf(myname, "ADD-%d", dt->id);
 
 
-    printf("[%s] Assigned directory: '%s'\n", myname, dt->path);
+    printf("[%s] Assigned directory: '%s'\n", myname, dt->assigned_dir);
 
 
 
@@ -120,7 +135,7 @@ int main (int argc, char* argv[]) {
     for (int i = 0; i < num_dir; i++) {
         //Filling thread_dir_data parameters
         thread_dir_data[i].id = i+1;
-        strncpy(thread_dir_data[i].path, argv[i+1], PATHSIZE);
+        strncpy(thread_dir_data[i].assigned_dir, argv[i+1], PATHSIZE);
         thread_dir_data[i].shared_data = shared_data;
         //Initializing thread itself
         if (pthread_create(&pthread_dir[i], NULL, &thread_dir, &thread_dir_data[i]) != 0) {
@@ -134,7 +149,7 @@ int main (int argc, char* argv[]) {
     for (int j = 0; j < NUM_ADD_THR; j++) {
         //Filling thread_add_data parameters
         thread_add_data[j].id = j+1;
-        memset(thread_add_data[j].path, 0, PATHSIZE);
+        memset(thread_add_data[j].assigned_dir, 0, PATHSIZE);
         thread_add_data[j].shared_data = shared_data;
         //Initializing thread itself
         if (pthread_create(&pthread_add[j], NULL, &thread_add, &thread_add_data[j]) != 0) {
