@@ -1,7 +1,6 @@
-#pragma once
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <unistd.h>
 
 typedef struct node {
     int key;
@@ -46,20 +45,84 @@ int insert_key (node_t** rootptr, int key) {
 
 int find_key (node_t* root, int key) {
     if (root == NULL) {
-        return 0;
+        perror("Selected root node is NULL");
+        exit(EXIT_FAILURE);
     }
 
     if (root->key == key){
+        printf("[BST] Given key found in tree!\n");
         return 1;
     }
 
     if (key < root->key){
+        printf("[BST] Checking left subtree...\n");
         return find_key(root->left, key);
 
     } else {
+        printf("[BST] Checking right subtree...\n");
         return find_key(root->right, key);
-
     }
+}
+
+void delete_key (node_t* root, int key) {
+    //Check if given node is NULL
+    if (root == NULL) {
+        perror("Selected root node is NULL");
+        exit(EXIT_FAILURE);
+    }
+    
+    if (root->key == key) {
+        //Checking pointers of node
+        printf("[BST] Key found! Deleting node...\n");
+        root->left->left = root->left;
+        root->left->right = root->right;
+        free (root);
+        return;
+    }
+
+    if (key < root->key){
+        printf("[BST] Checking left subtree...\n");
+        delete_key(root->left, key);
+
+    } else {
+        printf("[BST] Checking right subtree...\n");
+        delete_key(root->right, key);
+    }
+
+}
+
+int get_max_key (node_t* root) {
+    // Check if  given node is NULL
+    if (root == NULL) {
+        perror("Selected root node is NULL");
+        exit(EXIT_FAILURE);
+    }
+
+    //Check if right node is null and returns value
+    if (root->right == NULL) {
+        printf("[BST] Right subtree is NULL. Returning selected root key...\n");
+        return root->key;
+    }
+
+    //Ricursively calls get_max_key
+    get_max_key(root->right);
+}
+
+int get_min_key (node_t* root) {
+    // Check if  given node is NULL
+    if (root == NULL) {
+        printf("[BST] Selected root node is NULL\n");
+        return 0;
+    }
+
+    //Check if right node is null and returns value
+    if (root->left == NULL) {
+        printf("[BST] Left subtree is NULL. Returning selected root key...\n");
+        return root->key;
+    }
+
+    //Ricursively calls get_max_key
+    get_min_key(root->right);
 }
 
 void print_tabs (int num_tabs) {
