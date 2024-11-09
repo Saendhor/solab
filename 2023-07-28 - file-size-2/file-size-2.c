@@ -128,6 +128,7 @@ int main (int argc, char* argv[]) {
     }
 
     //Dynamic memory
+    deallocate_tree (shared_data->number_set);
     free(thread_dir_data);
     free (pthread_dir);
     free(shared_data);

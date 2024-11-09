@@ -125,6 +125,29 @@ int get_min_key (node_t* root) {
     get_min_key(root->right);
 }
 
+void deallocate_tree (node_t* root) {
+    //Checks if given tree was already deallocated or simply NULL
+    if (root == NULL){
+        printf("[BST] Given tree was already NULL\n");
+        return;
+    }
+
+    //Checks for right subtree recursively
+    if (root->right != NULL) {
+        printf("[BST] Deallocating right node with key %d\n", root->right->key);
+        deallocate_tree(root->right);
+    }
+    
+    //Checks for left subtree recursively
+    if (root->left != NULL) {
+        printf("[BST] Deallocating left node with key %d\n", root->left->key);
+        deallocate_tree(root->left);
+    }
+
+    //If node does not have right and left nodes then it gets deallocated from memory
+    free(root);
+}
+
 void print_tabs (int num_tabs) {
     for (int i = 0; i < num_tabs; i++) {
         printf ("\t");
