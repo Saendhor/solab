@@ -76,7 +76,10 @@ void* thread_dir (void* args) {
             }
 
             //Insert item into BST
-            insert_key(&dt->shared_data->number_set, (int)statbuf.st_size);
+            if (insert_key(&dt->shared_data->number_set, (int)statbuf.st_size, NULL) != 0) {
+                perror("Error while inserting new key to shared data");
+                exit(EXIT_FAILURE);
+            }
 
             if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
                 perror("Error while performing lock stack mutex");
@@ -147,14 +150,23 @@ void* thread_add (void* args) {
             if (&dt->shared_data->number_set->right != NULL || &dt->shared_data->number_set->left != NULL) {
                 //Get min and max from tree
                 max_key = get_max_key(dt->shared_data->number_set);
-                delete_key(dt->shared_data->number_set, max_key);
+                if (delete_key(dt->shared_data->number_set, max_key) != 0) {
+                    perror("Error while deleting max key");
+                    exit(EXIT_FAILURE);
+                }
 
                 min_key = get_max_key(dt->shared_data->number_set);
-                delete_key(dt->shared_data->number_set, min_key);
+                if (delete_key(dt->shared_data->number_set, min_key) != 0) {
+                    perror("Error while deleting min key");
+                    exit(EXIT_FAILURE);
+                }
 
                 //Insert newly created
                 printf("[%s] Max value %d, min value %d\n", myname, max_key, min_key);
-                insert_key(&dt->shared_data->number_set, max_key + min_key);
+                if (insert_key(&dt->shared_data->number_set, max_key + min_key, NULL) != 0) {
+                    perror("Error while inserting new key to shared data");
+                    exit(EXIT_FAILURE);
+                }
             }
         } else {
             dt->shared_data->exit_status = 1;

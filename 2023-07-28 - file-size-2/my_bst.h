@@ -4,6 +4,7 @@
 
 typedef struct node {
     int key;
+    struct node* parent;
     struct node* left;
     struct node* right;
 
@@ -15,31 +16,27 @@ node_t* new_node (int key) {
     
     if (temp != NULL) {
         temp->key = key;
-        temp->left = temp->right = NULL;
+        temp->parent = temp->left = temp->right = NULL;
     }
     return temp;
 }
 
-int insert_key (node_t** rootptr, int key) {
+int insert_key (node_t** rootptr, int key, node_t* prev) {
     node_t* root = *rootptr;
 
     if (root == NULL){
         //Tree empty
         (*rootptr) = new_node(key);
-        return 1;
-    }
-
-    if (key == root->key) {
-        //do nothing
+        (*rootptr)->parent = prev;
         return 0;
     }
 
-    if (key < root->key) {
+    if (key <= root->key) {
         //Check left
-        return insert_key(&(root->left), key);
+        return insert_key(&(root->left), key, root);
     } else {
         //Check right
-        return insert_key(&(root->right), key);
+        return insert_key(&(root->right), key, root);
     }
 }
 
@@ -64,7 +61,7 @@ int find_key (node_t* root, int key) {
     }
 }
 
-void delete_key (node_t* root, int key) {
+int delete_key (node_t* root, int key) {
     //Check if given node is NULL
     if (root == NULL) {
         perror("Selected root node is NULL");
@@ -72,12 +69,19 @@ void delete_key (node_t* root, int key) {
     }
     
     if (root->key == key) {
-        //Checking pointers of node
         printf("[BST] Key found! Deleting node...\n");
+        //root is root (parent == NULL)
+
+        //root has parent
+            //root is leaf (root->left == NULL && root->right == NULL)
+            //free(root);
+            //root has only right subtree (root->left == NULL)
+            //root->right->parent = root->parent;
+            
         root->left->left = root->left;
         root->left->right = root->right;
         free (root);
-        return;
+        return 0;
     }
 
     if (key < root->key){
