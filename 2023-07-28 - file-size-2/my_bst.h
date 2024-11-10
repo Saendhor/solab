@@ -61,40 +61,6 @@ int find_key (node_t* root, int key) {
     }
 }
 
-int delete_key (node_t* root, int key) {
-    //Check if given node is NULL
-    if (root == NULL) {
-        perror("Selected root node is NULL");
-        exit(EXIT_FAILURE);
-    }
-    
-    if (root->key == key) {
-        printf("[BST] Key found! Deleting node...\n");
-        //root is root (parent == NULL)
-
-        //root has parent
-            //root is leaf (root->left == NULL && root->right == NULL)
-            //free(root);
-            //root has only right subtree (root->left == NULL)
-            //root->right->parent = root->parent;
-            
-        root->left->left = root->left;
-        root->left->right = root->right;
-        free (root);
-        return 0;
-    }
-
-    if (key < root->key){
-        printf("[BST] Checking left subtree...\n");
-        delete_key(root->left, key);
-
-    } else {
-        printf("[BST] Checking right subtree...\n");
-        delete_key(root->right, key);
-    }
-
-}
-
 int get_max_key (node_t* root) {
     // Check if  given node is NULL
     if (root == NULL) {
@@ -127,6 +93,48 @@ int get_min_key (node_t* root) {
 
     //Ricursively calls get_max_key
     get_min_key(root->right);
+}
+
+node_t* delete_key (node_t* root, int key) {
+    //Check if given node is NULL
+    if (root == NULL) {
+        return NULL;
+    }
+    
+    if (key > root->key) {
+        // key >
+        root->right = delete_key(root->right, key);
+
+    } else if (key < root->key) {
+        // key <
+        root->left = delete_key(root->left, key);
+
+    } else {
+        // key =
+        if (root->left == NULL && root->right == NULL) {
+            //delete leaf node
+            free(root);
+            return NULL;
+
+        } else if (root->left == NULL || root->right == NULL) {
+            node_t* temp;
+            if (root->left == NULL) {
+                temp = root->right;
+
+            } else {
+                temp = root->left;
+            }
+            free(root);
+            return temp;
+            
+        } else {
+            node_t* temp = new_node(get_min_key(root->right));
+            root->key = temp->key;
+            root->right = delete_key(root->right, temp->key);
+        }
+    }
+
+    return root;
 }
 
 void deallocate_tree (node_t* root) {

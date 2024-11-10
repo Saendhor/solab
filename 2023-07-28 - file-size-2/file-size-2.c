@@ -150,16 +150,10 @@ void* thread_add (void* args) {
             if (&dt->shared_data->number_set->right != NULL || &dt->shared_data->number_set->left != NULL) {
                 //Get min and max from tree
                 max_key = get_max_key(dt->shared_data->number_set);
-                if (delete_key(dt->shared_data->number_set, max_key) != 0) {
-                    perror("Error while deleting max key");
-                    exit(EXIT_FAILURE);
-                }
+                delete_key(dt->shared_data->number_set, max_key);
 
                 min_key = get_max_key(dt->shared_data->number_set);
-                if (delete_key(dt->shared_data->number_set, min_key) != 0) {
-                    perror("Error while deleting min key");
-                    exit(EXIT_FAILURE);
-                }
+                delete_key(dt->shared_data->number_set, min_key);
 
                 //Insert newly created
                 printf("[%s] Max value %d, min value %d\n", myname, max_key, min_key);
