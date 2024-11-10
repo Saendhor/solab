@@ -16,9 +16,11 @@
 typedef struct shared_data {
     //Shared data structure
     node_t* number_set;
+    unsigned int exit_status;
+    unsigned int num_dir;
 
     //Semaphore(s)
-    //sem_t full_sem, empty_sem;
+    sem_t shared_data_sem;
 
     //Mutex(es)
     pthread_mutex_t shared_data_mutex;
@@ -84,6 +86,30 @@ void* thread_dir (void* args) {
         memset(path, 0, PATHSIZE);
     }
 
+    //Activate ADD threads if all DIR threads have ended
+    if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    //Increase exit status
+    dt->shared_data->exit_status += 1;
+
+    //Perform post on ADD(s) semaphore
+    if (dt->shared_data->exit_status == dt->shared_data->num_dir) {
+        printf("[%s] Insertion in BST completed with exit status %d. Waking ADD threads\n", myname, dt->shared_data->exit_status);
+        if (sem_post(&dt->shared_data->shared_data_sem) != 0) {
+            perror("Error while trying to perform sem_post to shared data sem");
+            exit(EXIT_FAILURE);
+        }
+        dt->shared_data->exit_status = 0;
+    }
+
+    if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+        perror("Error while performing lock stack mutex");
+        exit(EXIT_FAILURE);
+    }
+
     //Closing
     printf("[%s] Job completed. Closing thread\n", myname);
     return NULL;
@@ -95,15 +121,52 @@ void* thread_add (void* args) {
         estrarre il minimo e il massimo attuale e di re-inserire la loro somma
     */
     thread_data_t* dt = (thread_data_t*) args;
+    int max_key = 0;
+    int min_key = 0;
+    int exit_status = 0;
     
     //Conveniently defining name
     char myname[NAMESIZE];
     sprintf(myname, "ADD-%d", dt->id);
 
+    //Waits for thread(s) DIR to complete insertion
+    if (sem_wait(&dt->shared_data->shared_data_sem) != 0) {
+        perror("Error while trying to perform sem_wait to shared data sem");
+        exit(EXIT_FAILURE);
+    }
+    
+    while (exit_status == 0) {
 
-    printf("[%s] Assigned directory: '%s'\n", myname, dt->assigned_dir);
+        if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
+            perror("Error while locking mutex");
+            exit(EXIT_FAILURE);
+        }
 
+        if (&dt->shared_data->number_set != NULL) {
+            //Check right && check left
+            if (&dt->shared_data->number_set->right != NULL || &dt->shared_data->number_set->left != NULL) {
+                //Get min and max from tree
+                max_key = get_max_key(dt->shared_data->number_set);
+                delete_key(dt->shared_data->number_set, max_key);
 
+                min_key = get_max_key(dt->shared_data->number_set);
+                delete_key(dt->shared_data->number_set, min_key);
+
+                //Insert newly created
+                printf("[%s] Max value %d, min value %d\n", myname, max_key, min_key);
+                insert_key(&dt->shared_data->number_set, max_key + min_key);
+            }
+        } else {
+            dt->shared_data->exit_status = 1;
+        }
+        exit_status = dt->shared_data->exit_status;
+        
+        if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+            perror("Error while locking mutex");
+            exit(EXIT_FAILURE);
+        }
+
+    }
 
     //Closing
     printf("[%s] Job completed. Closing thread\n", myname);
@@ -129,17 +192,14 @@ int main (int argc, char* argv[]) {
     //Initialization
     //Shared Data
     shared_data->number_set = NULL;
-/*    
-    if (sem_init(&shared_data->full_sem, 0, 0) != 0) {
-        perror("Error while initializating full_sem");
-        exit(EXIT_FAILURE);
-    }
-
-    if (sem_init(&shared_data->empty_sem, 0, N) != 0) {
+    shared_data->exit_status = 0;
+    shared_data->num_dir = num_dir;
+    
+    if (sem_init(&shared_data->shared_data_sem, 0, 1) != 0) {
         perror("Error while initializating empty_sem");
         exit(EXIT_FAILURE);
     }
-*/
+
     if (pthread_mutex_init(&shared_data->shared_data_mutex, NULL)) {
         perror("Error while trying to initialize shared_data mutex");
         exit(EXIT_FAILURE);
@@ -202,6 +262,12 @@ int main (int argc, char* argv[]) {
     }
 
     //Destroying semaphore(s) and mutex(es)
+    if (sem_destroy(&shared_data->shared_data_sem) != 0) {
+        perror("Error while performing sem_destroy");
+        exit(EXIT_FAILURE);
+    }
+
+
     if (pthread_mutex_destroy(&shared_data->shared_data_mutex) != 0) {
         perror("Error while destroying shared_data mutex");
         exit(EXIT_FAILURE);
