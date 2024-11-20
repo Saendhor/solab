@@ -1,4 +1,4 @@
-#include "my_bst.h"
+#include "my_list.h"
 
 #include <dirent.h>
 #include <pthread.h>
@@ -76,7 +76,7 @@ void* thread_dir (void* args) {
             }
 
             //Insert item into BST
-            if (insert_key(&dt->shared_data->number_set, (int)statbuf.st_size, NULL) != 0) {
+            if (insert_key(&dt->shared_data->number_set, (int)statbuf.st_size) != 0) {
                 perror("Error while inserting new key to shared data");
                 exit(EXIT_FAILURE);
             }
@@ -145,26 +145,25 @@ void* thread_add (void* args) {
             exit(EXIT_FAILURE);
         }
 
-        if (&dt->shared_data->number_set != NULL) {
-            //Check right && check left
-            if (&dt->shared_data->number_set->right != NULL || &dt->shared_data->number_set->left != NULL) {
-                //Get min and max from tree
-                max_key = get_max_key(dt->shared_data->number_set);
-                delete_key(dt->shared_data->number_set, max_key);
+        if (dt->shared_data->number_set != NULL && dt->shared_data->number_set->next != NULL) {    
+            //Get min and max from tree
+            max_key = get_max_key(dt->shared_data->number_set);
+            delete_key(dt->shared_data->number_set, max_key);
 
-                min_key = get_max_key(dt->shared_data->number_set);
-                delete_key(dt->shared_data->number_set, min_key);
+            min_key = get_max_key(dt->shared_data->number_set);
+            delete_key(dt->shared_data->number_set, min_key);
 
-                //Insert newly created
-                printf("[%s] Max value %d, min value %d\n", myname, max_key, min_key);
-                if (insert_key(&dt->shared_data->number_set, max_key + min_key, NULL) != 0) {
-                    perror("Error while inserting new key to shared data");
-                    exit(EXIT_FAILURE);
-                }
+            //Insert newly created
+            printf("[%s] Max value %d, min value %d\n", myname, max_key, min_key);
+            if (insert_key(dt->shared_data->number_set, max_key + min_key) != 0) {
+                perror("Error while inserting new key to shared data");
+                exit(EXIT_FAILURE);
             }
-        } else {
+         } else {
             dt->shared_data->exit_status = 1;
         }
+
+        //Checks shared data exit status while in critical region
         exit_status = dt->shared_data->exit_status;
         
         if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
@@ -280,7 +279,7 @@ int main (int argc, char* argv[]) {
     }
 
     //Dynamic memory
-    deallocate_tree (shared_data->number_set);
+    deallocate_list (shared_data->number_set);
     free(thread_dir_data);
     free (pthread_dir);
     free(shared_data);
