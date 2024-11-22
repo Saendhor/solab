@@ -9,7 +9,7 @@
 #define NAMESIZE 16
 #define PATHSIZE 32
 
-typedef enum {ADD = 1, SUB, MUL} operation;
+ enum operation {ADD, SUB, MUL, NUM_OPERATIONS} ;
 
 typedef struct shared_data {
     long long operand_1;
@@ -131,7 +131,7 @@ void* fthread_calc (void* args) {
             }
 
             //sem_wait su me stesso con sem_post da parte dell' op_thread che risveglia il mio semaforo sapendo che è un vettore con slot
-            sem_wait()
+            //sem_wait()
 
         } else {
             printf("[%s] Last value detected is '%lld'\n", myname, atoll(buffer));
@@ -144,38 +144,36 @@ void* fthread_calc (void* args) {
     return NULL;
 }
 
-void* fthread_add (void* args) {
+void* fthread_operation (void* args) {
     thread_data_t* dt = (thread_data_t*) args;
 
-    //Defining the name
-    char myname [NAMESIZE] = "ADD\0";
+    while (dt->id == ADD) {
+        //Defining the name
+        char myname [NAMESIZE] = "ADD\0";
     
-    printf("[%s] Working with path '%s'\n", myname, dt->filepath);
+        printf("[%s] Working with path '%s'\n", myname, dt->filepath);
+        break;
+    }
+
+    while (dt->id == SUB) {
+        //Defining the name
+        char myname [NAMESIZE] = "SUB\0";
+    
+        printf("[%s] Working with path '%s'\n", myname, dt->filepath);
+        break;
+    }
+
+    while (dt->id == MUL) {
+        //Defining the name
+        char myname [NAMESIZE] = "MUL\0";
+    
+        printf("[%s] Working with path '%s'\n", myname, dt->filepath);
+        break;
+    }
 
     return NULL;
 }
 
-void* fthread_sub (void* args) {
-    thread_data_t* dt = (thread_data_t*) args;
-
-    //Defining the name
-    char myname [NAMESIZE] = "SUB\0";
-    
-    printf("[%s] Working with path '%s'\n", myname, dt->filepath);
-
-    return NULL;
-}
-
-void* fthread_mul (void* args) {
-    thread_data_t* dt = (thread_data_t*) args;
-
-    //Defining the name
-    char myname [NAMESIZE] = "MUL\0";
-    
-    printf("[%s] Working with path '%s'\n", myname, dt->filepath);
-
-    return NULL;
-}
 
 int main (int argc, char* argv[]) {
     printf ("[MAIN] Entering program...\n");
@@ -195,13 +193,10 @@ int main (int argc, char* argv[]) {
     pthread_t* thread_calc = (pthread_t*) malloc (sizeof(pthread_t) * num_files);
 
     //Operation(s)
-    thread_data_t* operation_thread_data = (thread_data_t*) malloc (sizeof(thread_data_t) * 3); //0 1 2
-    pthread_t* thread_add = (pthread_t*) malloc (sizeof(pthread_t));
-    pthread_t* thread_sub = (pthread_t*) malloc (sizeof(pthread_t));
-    pthread_t* thread_mul = (pthread_t*) malloc (sizeof(pthread_t));
-
+    thread_data_t* operation_thread_data = (thread_data_t*) malloc (sizeof(thread_data_t) * NUM_OPERATIONS); //0 1 2
+    pthread_t* thread_operation = (pthread_t*) malloc (sizeof(pthread_t) * NUM_OPERATIONS);
     
-
+    
     //Defining
     //Shared data across the code
     shared_data->operand_1 = 0;
@@ -238,31 +233,15 @@ int main (int argc, char* argv[]) {
     }
 
     //Operation(s)
-    //ADD
-    operation_thread_data[0].id = ADD;
-    memset(operation_thread_data[0].filepath, 0, PATHSIZE);
-    operation_thread_data[0].shared_data = shared_data;
-    if (pthread_create(thread_add, NULL, fthread_add, &operation_thread_data[0]) != 0){
-        perror("Error while performing pthread_create for thread_calc");
-        exit(EXIT_FAILURE);
-    }
-
-    //SUB
-    operation_thread_data[1].id = SUB;
-    memset(operation_thread_data[1].filepath, 0, PATHSIZE);
-    operation_thread_data[1].shared_data = shared_data;
-    if (pthread_create(thread_sub, NULL, fthread_sub, &operation_thread_data[1]) != 0){
-        perror("Error while performing pthread_create for thread_calc");
-        exit(EXIT_FAILURE);
-    }
-
-    //MUL
-    operation_thread_data[2].id = MUL;
-    memset(operation_thread_data[2].filepath, 0, PATHSIZE);
-    operation_thread_data[2].shared_data = shared_data;
-    if (pthread_create(thread_mul, NULL, fthread_mul, &operation_thread_data[2]) != 0){
-        perror("Error while performing pthread_create for thread_calc");
-        exit(EXIT_FAILURE);
+    // j and operations in operation coincide
+    for (int j = 0; j < NUM_OPERATIONS; j++) {
+        operation_thread_data[j].id = j;
+        memset(operation_thread_data[j].filepath, 0, PATHSIZE);
+        operation_thread_data[j].shared_data = shared_data;
+        if (pthread_create(&thread_operation[j], NULL, fthread_operation, &operation_thread_data[j]) != 0){
+            perror("Error while performing pthread_create for thread_calc");
+            exit(EXIT_FAILURE);
+        }
     }
 
     //Closing
@@ -277,37 +256,18 @@ int main (int argc, char* argv[]) {
     }
 
     //Operation(s)
-    //ADD
-    if (pthread_join(*thread_add, NULL) != 0) {
-        perror("Error while performing pthread_join for thread_add");
-        exit(EXIT_FAILURE);
-    }
-
-    //SUB
-    if (pthread_join(*thread_sub, NULL) != 0) {
-        perror("Error while performing pthread_join for thread_sub");
-        exit(EXIT_FAILURE);
-    }
-
-    //MUL
-    if (pthread_join(*thread_mul, NULL) != 0) {
-        perror("Error while performing pthread_join for thread_mul");
-        exit(EXIT_FAILURE);
-    }
-
-    //Mutex(es)
-    if (pthread_mutex_destroy(&shared_data->shared_data_mutex) != 0) {
-        perror("Error while performing pthread_mutex_destroy on shared_data_mutex");
-        exit(EXIT_FAILURE);
+    for (int j = 0; j < NUM_OPERATIONS; j++) {
+        if (pthread_join(thread_operation[j], NULL) != 0) {
+            perror("Error while performing pthread_join for thread_calc");
+            exit(EXIT_FAILURE);
+        }
     }
 
     //Free
     free(operation_thread_data);
-    free(thread_mul);
-    free(thread_sub);
-    free(thread_add);
     free(calc_thread_data);
     free(thread_calc);
+    free(thread_operation);
     free(shared_data);
     printf("[MAIN] Dynamicly allocated memory successfully freed!\n");
 
