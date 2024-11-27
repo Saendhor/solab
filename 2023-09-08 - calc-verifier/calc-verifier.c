@@ -6,10 +6,11 @@
 #include <unistd.h>
 
 #define BUFFERSIZE 32
+#define CLOSE -1
 #define NAMESIZE 16
 #define PATHSIZE 32
 
- enum operation {ADD, SUB, MUL, NUM_OPERATIONS} ;
+ enum operation {ADD= 0, SUB, MUL, NUM_OPERATIONS} ;
 
 typedef struct shared_data {
     long long operand_1;
@@ -37,15 +38,12 @@ typedef struct thread_data {
 
 
 void* fthread_calc (void* args) {
-    /*
-        Si occuperanno di leggere il rispettivo file in input e di coordinare il calcolo/verifica
-    */
     thread_data_t* dt = (thread_data_t*) args;
     FILE* fp;
     char buffer [BUFFERSIZE];
     char operation [2];
     long long total;
-    
+    static short exit_message = 0;
 
     //Cleansing the buffer
     memset(buffer, 0, BUFFERSIZE);
@@ -54,8 +52,24 @@ void* fthread_calc (void* args) {
     char myname [NAMESIZE];
     snprintf(myname, NAMESIZE, "CALC-%d", dt->id);
 
-    printf("[%s] Working with path '%s'\n", myname, dt->filepath);
+    //lock
+    if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
+        perror("Error while performing mutex_lock on shared_data_mutex");
+        exit(EXIT_FAILURE);
+    }
 
+    if (dt->id > exit_message) {
+        printf("[%s] my id %u / exit_message %u\n", myname, dt->id ,exit_message);
+        exit_message = dt->id -1;
+    }
+
+    //unlock
+    if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+        perror("Error while performing mutex_unlock on shared_data_mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("[%s] Working with path '%s'\n", myname, dt->filepath);
     if ((fp = fopen(dt->filepath, "r")) == NULL) {
         perror("Error while trying to open given file");
         exit(EXIT_FAILURE);
@@ -75,6 +89,7 @@ void* fthread_calc (void* args) {
     printf("[%s] First line content is '%s' \n", myname, buffer);
     total = atoll(buffer);
 
+    printf ("EXIT MESSAGE %u\n", exit_message);
     while (!feof(fp)) {
         
         //Cleans the buffer
@@ -98,7 +113,6 @@ void* fthread_calc (void* args) {
 
             printf("[%s] Value in operation '%s'\n", myname, operation);
             printf("[%s] Value in buffer: %lld\n", myname, atoll(buffer));
-            break;
 
             //lock
             if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
@@ -106,9 +120,10 @@ void* fthread_calc (void* args) {
                 exit(EXIT_FAILURE);
             }
 
+            //Insert new items into shared data in order to be processed by thread_operation
             dt->shared_data->operand_1 = total;
             dt->shared_data->operand_2 = atoll(buffer);
-            dt->shared_data->requester = dt->id; //Attention: it MUST NOT be 0 otherwise it finishes the works
+            dt->shared_data->requester = dt->id;
 
             if (operation[0] == '+') {
                 dt->shared_data->operation = ADD;
@@ -130,11 +145,61 @@ void* fthread_calc (void* args) {
                 exit(EXIT_FAILURE);
             }
 
-            //sem_wait su me stesso con sem_post da parte dell' op_thread che risveglia il mio semaforo sapendo che è un vettore con slot
-            //sem_wait()
+
+            // sem_wait on myself whereas sem_post by requested op_thread knowing calc_thread_sem is a vector
+            if (sem_wait(&dt->shared_data->calc_thread_sem[dt->id -1]) != 0) {
+                perror("Error while performing sem_wait on calc_thread_sem[dt->id -1]");
+                exit(EXIT_FAILURE);
+            }
+
+            //lock
+            if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
+                perror("Error while performing mutex_lock on shared_data_mutex");
+                exit(EXIT_FAILURE);
+            }
+
+            //Update total sum
+            //no need to check if the request is complied by me because it can already have been overwritten by another
+            //thread calc that acquired lock
+            total = dt->shared_data->result;
+
+            //unlock
+            if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+                perror("Error while performing mutex_lock on shared_data_mutex");
+                exit(EXIT_FAILURE);
+            }
+            printf("[%s] Updated total is now '%lld'\n", myname, total);
+
 
         } else {
             printf("[%s] Last value detected is '%lld'\n", myname, atoll(buffer));
+
+            if (atoll(buffer) == total){
+                printf("[%s] Check completed successfully (%lld, %lld)\n", myname, total, atoll(buffer));
+
+            } else {
+                printf("[%s] Last line reached with total (%lld, %lld)\n", myname, total, atoll(buffer));
+
+            }
+
+            //lock
+            if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
+                perror("Error while performing mutex_lock on shared_data_mutex");
+                exit(EXIT_FAILURE);
+            }
+
+            exit_message -= 1;
+            if (exit_message == CLOSE) {
+                dt->shared_data->operation = CLOSE;
+            }
+            printf("[%s] Updated exit message (local) %u / (shared) %u\n", myname, exit_message, dt->shared_data->operation);
+
+            //unlock
+            if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+                perror("Error while performing mutex_unlock on shared_data_mutex");
+                exit(EXIT_FAILURE);
+            }
+            break;
         }
     }
 
@@ -146,31 +211,74 @@ void* fthread_calc (void* args) {
 
 void* fthread_operation (void* args) {
     thread_data_t* dt = (thread_data_t*) args;
+    char myname [NAMESIZE];
 
-    while (dt->id == ADD) {
-        //Defining the name
-        char myname [NAMESIZE] = "ADD\0";
-    
-        printf("[%s] Working with path '%s'\n", myname, dt->filepath);
-        break;
+    //Determine name for string "myname"
+    if (dt->id == ADD) {
+        snprintf(myname, NAMESIZE, "ADD");
+
+    } else if (dt->id == SUB) {
+        snprintf(myname, NAMESIZE, "SUB");
+
+    } else if (dt->id == MUL) {
+        snprintf(myname, NAMESIZE, "MUL");
+
+    } else {
+        perror("Error while determining name");
+        exit(EXIT_FAILURE);
+    }
+    printf("[%s] Working with path '%s'\n", myname, dt->filepath);
+
+    while (1) {
+        //lock
+        if (pthread_mutex_lock(&dt->shared_data->shared_data_mutex) != 0) {
+            perror("Error while performing mutex_lock on shared_data_mutex");
+            exit(EXIT_FAILURE);
+        }
+
+        if (dt->shared_data->operation >= 0 && dt->shared_data->operation < NUM_OPERATIONS){
+            //Returns result
+            if (dt->id == ADD) {
+                dt->shared_data->result = dt->shared_data->operand_1 + dt->shared_data->operand_2;
+                //printf("[%s] '%lld' + '%lld' = '%lld'\n", myname, dt->shared_data->operand_1, dt->shared_data->operand_2, dt->shared_data->result);
+
+            } else if (dt->id == SUB) {
+                dt->shared_data->result = dt->shared_data->operand_1 - dt->shared_data->operand_2;
+                //printf("[%s] '%lld' - '%lld' = '%lld'\n", myname, dt->shared_data->operand_1, dt->shared_data->operand_2, dt->shared_data->result);
+
+            } else if (dt->id == MUL) {
+                dt->shared_data->result = dt->shared_data->operand_1 * dt->shared_data->operand_2;
+                //printf("[%s] '%lld' x '%lld' = '%lld'\n", myname, dt->shared_data->operand_1, dt->shared_data->operand_2, dt->shared_data->result);
+
+            } else {
+                printf("[%s] Unrecognized operation\n", myname);
+            }
+
+            //sem_post on requester
+            if (sem_post(&dt->shared_data->calc_thread_sem[dt->shared_data->requester]) != 0) {
+                perror("Error while performing sem_wait on calc_thread_sem[dt->id -1]");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if (dt->shared_data->operation == CLOSE){
+            //unlock
+            if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+                perror("Error while performing mutex_lock on shared_data_mutex");
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+
+        //unlock
+        if (pthread_mutex_unlock(&dt->shared_data->shared_data_mutex) != 0) {
+            perror("Error while performing mutex_lock on shared_data_mutex");
+            exit(EXIT_FAILURE);
+        }
+
     }
 
-    while (dt->id == SUB) {
-        //Defining the name
-        char myname [NAMESIZE] = "SUB\0";
-    
-        printf("[%s] Working with path '%s'\n", myname, dt->filepath);
-        break;
-    }
-
-    while (dt->id == MUL) {
-        //Defining the name
-        char myname [NAMESIZE] = "MUL\0";
-    
-        printf("[%s] Working with path '%s'\n", myname, dt->filepath);
-        break;
-    }
-
+    printf("[%s] Job completed. Closing...\n", myname);
     return NULL;
 }
 
