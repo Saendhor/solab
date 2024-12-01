@@ -18,8 +18,6 @@ typedef struct shared_data {
 
 int main (int argc, char* argv[]) {
 
-
-
     if (argc != 3) {
         perror("Error with inputed parameters");
         exit(EXIT_FAILURE);
